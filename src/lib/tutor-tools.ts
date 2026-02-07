@@ -7,6 +7,7 @@
 import { tutorQuizSchema } from "@/components/tutor/tutor-quiz";
 import { tutorStepByStepSchema } from "@/components/tutor/tutor-steps";
 import { tutorMathSchema } from "@/components/tutor/tutor-math";
+import { webSearchSchema } from "@/components/tutor/web-search";
 import { useCanvasStore } from "@/lib/canvas-storage";
 import { z } from "zod";
 
@@ -68,13 +69,49 @@ export async function showMath(props: z.infer<typeof tutorMathSchema>) {
     return addToCanvas("TutorMath", props);
 }
 
+// Web search input schema (just the query)
+export const webSearchInputSchema = z.object({
+    query: z.string().describe("The search query to look up on the web"),
+});
+
+/**
+ * Tool to perform a web search for real-time information
+ */
+export async function webSearch(props: z.infer<typeof webSearchInputSchema>) {
+    try {
+        // Call our API endpoint to perform the search
+        const response = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: props.query }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+
+        const data = await response.json();
+
+        // Add search results to canvas
+        return addToCanvas("WebSearch", {
+            query: props.query,
+            results: data.results || [],
+            isSearching: false,
+        });
+    } catch (error: any) {
+        console.error("Web search error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
 // Export the schemas for registration
 // Export schemas wrapped in function arguments for tool registration
 // export const showConceptSchema = z.function().args(tutorConceptSchema);
 export const showQuizSchema = z.function().args(tutorQuizSchema);
 export const showStepsSchema = z.function().args(tutorStepByStepSchema);
 export const showMathSchema = z.function().args(tutorMathSchema);
+export const webSearchToolSchema = z.function().args(webSearchInputSchema);
 
 // Also export the raw component schemas for component registration
-export { tutorQuizSchema, tutorStepByStepSchema, tutorMathSchema };
+export { tutorQuizSchema, tutorStepByStepSchema, tutorMathSchema, webSearchSchema };
 // export { tutorConceptSchema, tutorQuizSchema, tutorStepByStepSchema, tutorMathSchema };

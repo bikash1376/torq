@@ -256,7 +256,7 @@ const InteractiveQuiz = ({ question, options, correctAnswerIndex, explanation }:
                     disabled={selected === null}
                     className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-bold transition-colors"
                 >
-                    Check My Answer ✨
+                    Check My Answer
                 </button>
             ) : (
                 <div className={`p-4 rounded-lg ${isCorrect ? 'bg-green-100 dark:bg-green-900/40' : 'bg-amber-100 dark:bg-amber-900/40'}`}>
@@ -278,13 +278,92 @@ export function TutorMath(props: TutorMathProps) {
     const [currentSlideIndex, setCurrentSlideIndex] = useState(-1);
     const lastSpokenSlideRef = React.useRef(-1);
 
+    // Pre-fetched audio data
+    const [audioData, setAudioData] = useState<{ src: string; duration: number }[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
     // Safety check for slides
     const safeSlides = Array.isArray(props.slides) ? props.slides : [];
 
-    // Calculate duration for each slide based on text length
+    // Get text to speak for a slide
+    const getSlideText = React.useCallback((slide: typeof safeSlides[0]) => {
+        if (!slide) return '';
+        return slide.narration || `${slide.title}. ${slide.content}`;
+    }, []);
+
+    // Pre-fetch all audio on mount
+    useEffect(() => {
+        if (safeSlides.length === 0) {
+            setIsLoading(false);
+            return;
+        }
+
+        const fetchAllAudio = async () => {
+            console.log('[TutorMath] Pre-fetching audio for', safeSlides.length, 'slides...');
+
+            const audioPromises = safeSlides.map(async (slide, index) => {
+                const text = getSlideText(slide);
+                if (!text) return { src: '', duration: 5 }; // 5 second fallback
+
+                try {
+                    const response = await fetch('/api/tts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text,
+                            voice: 'en-US-EmmaNeural',
+                            rate: '+0%',
+                            pitch: '+0Hz',
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        console.error('[TutorMath] TTS error for slide', index);
+                        return { src: '', duration: 5 };
+                    }
+
+                    const data = await response.json();
+                    const audioSrc = `data:audio/mp3;base64,${data.audio}`;
+
+                    // Get actual audio duration by loading it
+                    const audioDuration = await new Promise<number>((resolve) => {
+                        const audio = new Audio(audioSrc);
+                        audio.addEventListener('loadedmetadata', () => {
+                            console.log('[TutorMath] Slide', index, 'audio duration:', audio.duration, 's');
+                            resolve(audio.duration);
+                        });
+                        audio.addEventListener('error', () => {
+                            console.error('[TutorMath] Error loading audio for slide', index);
+                            resolve(5); // Fallback
+                        });
+                    });
+
+                    return { src: audioSrc, duration: audioDuration };
+                } catch (error) {
+                    console.error('[TutorMath] Error fetching audio for slide', index, error);
+                    return { src: '', duration: 5 };
+                }
+            });
+
+            const results = await Promise.all(audioPromises);
+            console.log('[TutorMath] All audio loaded:', results.map(r => r.duration.toFixed(1) + 's'));
+            setAudioData(results);
+            setIsLoading(false);
+        };
+
+        fetchAllAudio();
+    }, [safeSlides, getSlideText]);
+
+    // Calculate slide durations based on actual audio duration
     const slideDurations = useMemo(() => {
-        return safeSlides.map(slide => calculateSlideDuration(slide));
-    }, [safeSlides]);
+        if (audioData.length === 0) {
+            // Fallback while loading
+            return safeSlides.map(slide => calculateSlideDuration(slide));
+        }
+        // Use actual audio duration + 1 second buffer, convert to frames
+        return audioData.map(audio => Math.ceil((audio.duration + 1) * 30));
+    }, [audioData, safeSlides]);
 
     // Calculate total duration and cumulative frame positions
     const { durationInFrames, slideStartFrames } = useMemo(() => {
@@ -297,66 +376,45 @@ export function TutorMath(props: TutorMathProps) {
         return { durationInFrames: Math.max(1, total), slideStartFrames: starts };
     }, [slideDurations]);
 
-    // Audio element ref for playing TTS
-    const audioRef = React.useRef<HTMLAudioElement | null>(null);
+    // Play audio for a specific slide
+    const playSlideAudio = React.useCallback((slideIndex: number) => {
+        if (slideIndex < 0 || slideIndex >= audioData.length) return;
 
-    // Speak narration using Neural TTS API
-    const speakNarration = React.useCallback(async (text: string) => {
-        console.log('[TutorMath] Speaking with Neural TTS:', text.substring(0, 50) + '...');
+        const audio = audioData[slideIndex];
+        if (!audio.src) return;
 
         // Stop any currently playing audio
         if (audioRef.current) {
             audioRef.current.pause();
-            audioRef.current.src = '';
         }
 
-        try {
-            const response = await fetch('/api/tts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    text,
-                    voice: 'en-US-EmmaNeural', // Natural female voice
-                    rate: '+0%',
-                    pitch: '+0Hz',
-                }),
-            });
+        if (!audioRef.current) {
+            audioRef.current = new Audio();
+        }
 
-            if (!response.ok) {
-                console.error('[TutorMath] TTS API error:', response.status);
-                return;
-            }
+        audioRef.current.src = audio.src;
+        audioRef.current.play().catch(e => {
+            console.error('[TutorMath] Audio play error:', e);
+        });
 
-            const data = await response.json();
+        console.log('[TutorMath] Playing slide', slideIndex, 'audio');
+    }, [audioData]);
 
-            if (data.audio) {
-                // Decode base64 audio and play
-                const audioSrc = `data:audio/mp3;base64,${data.audio}`;
-
-                if (!audioRef.current) {
-                    audioRef.current = new Audio();
+    // Auto-start first slide audio when loading completes
+    useEffect(() => {
+        if (!isLoading && audioData.length > 0 && lastSpokenSlideRef.current === -1) {
+            // Reset the ref and wait a moment for player to be ready
+            console.log('[TutorMath] Audio loaded, preparing to play first slide...');
+            const timeout = setTimeout(() => {
+                if (playerRef.current && lastSpokenSlideRef.current === -1) {
+                    lastSpokenSlideRef.current = 0;
+                    setCurrentSlideIndex(0);
+                    playSlideAudio(0);
                 }
-
-                audioRef.current.src = audioSrc;
-                audioRef.current.play().catch(e => {
-                    console.error('[TutorMath] Audio play error:', e);
-                });
-
-                console.log('[TutorMath] Playing audio, word count:', data.wordCount);
-            }
-        } catch (error) {
-            console.error('[TutorMath] TTS fetch error:', error);
+            }, 500);
+            return () => clearTimeout(timeout);
         }
-    }, []);
-
-    // Get text to speak for a slide (use narration or fall back to content)
-    const getSlideText = React.useCallback((slide: typeof safeSlides[0]) => {
-        if (!slide) return '';
-        // Use narration if available, otherwise use title + content
-        return slide.narration || `${slide.title}. ${slide.content}`;
-    }, []);
+    }, [isLoading, audioData, playSlideAudio]);
 
     // Track current slide based on player frame using polling
     useEffect(() => {
@@ -384,17 +442,12 @@ export function TutorMath(props: TutorMathProps) {
                 }
                 slideIndex = Math.min(slideIndex, safeSlides.length - 1);
 
-                // Only speak when transitioning to a new slide
+                // Only play audio when transitioning to a new slide
                 if (slideIndex >= 0 && slideIndex !== lastSpokenSlideRef.current) {
                     console.log('[TutorMath] Slide changed to:', slideIndex);
                     lastSpokenSlideRef.current = slideIndex;
                     setCurrentSlideIndex(slideIndex);
-
-                    const slide = safeSlides[slideIndex];
-                    const textToSpeak = getSlideText(slide);
-                    if (textToSpeak) {
-                        speakNarration(textToSpeak);
-                    }
+                    playSlideAudio(slideIndex);
                 }
             } catch (e) {
                 console.error('[TutorMath] Error getting frame:', e);
@@ -407,15 +460,12 @@ export function TutorMath(props: TutorMathProps) {
             console.log('[TutorMath] Video started playing');
             isPlaying = true;
 
-            // Speak first slide immediately when play starts
-            if (lastSpokenSlideRef.current === -1 && safeSlides[0]) {
+            // Play first slide audio immediately when play starts
+            if (lastSpokenSlideRef.current === -1 && audioData.length > 0) {
                 lastSpokenSlideRef.current = 0;
                 setCurrentSlideIndex(0);
-                const textToSpeak = getSlideText(safeSlides[0]);
-                if (textToSpeak) {
-                    // Small delay to ensure voices are loaded
-                    setTimeout(() => speakNarration(textToSpeak), 100);
-                }
+                // Small delay to ensure everything is ready
+                setTimeout(() => playSlideAudio(0), 100);
             }
 
             animationId = requestAnimationFrame(checkFrame);
@@ -487,7 +537,7 @@ export function TutorMath(props: TutorMathProps) {
                 audioRef.current.src = '';
             }
         };
-    }, [safeSlides, speakNarration, getSlideText, slideStartFrames]);
+    }, [safeSlides, playSlideAudio, slideStartFrames, audioData]);
 
     return (
         <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden max-w-2xl w-full mx-auto">
@@ -508,21 +558,29 @@ export function TutorMath(props: TutorMathProps) {
 
             {/* Video Player */}
             <div className="aspect-video w-full bg-slate-900 relative">
-                <Player
-                    ref={playerRef}
-                    component={MathComposition}
-                    inputProps={{ slides: safeSlides, slideDurations }}
-                    durationInFrames={durationInFrames}
-                    compositionWidth={1280}
-                    compositionHeight={720}
-                    fps={30}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                    }}
-                    controls
-                    autoPlay
-                />
+                {isLoading ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+                        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
+                        <p className="text-lg font-medium">Preparing audio narration...</p>
+                        <p className="text-sm text-zinc-400 mt-1">Loading {safeSlides.length} slides</p>
+                    </div>
+                ) : (
+                    <Player
+                        ref={playerRef}
+                        component={MathComposition}
+                        inputProps={{ slides: safeSlides, slideDurations }}
+                        durationInFrames={durationInFrames}
+                        compositionWidth={1280}
+                        compositionHeight={720}
+                        fps={30}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                        }}
+                        controls
+                        autoPlay={!isLoading}
+                    />
+                )}
             </div>
 
             {/* Interactive Quiz - shown after video or always available */}
