@@ -24,6 +24,8 @@ export interface CanvasState {
   canvases: Canvas[];
   activeCanvasId: string | null;
   pendingOperations: Set<string>;
+  componentHistory: CanvasComponent[];
+  addToHistory: (component: CanvasComponent) => void;
   // Actions
   getCanvases: () => Canvas[];
   getCanvas: (id: string) => Canvas | undefined;
@@ -64,6 +66,15 @@ export const useCanvasStore = create<CanvasState>()(
       canvases: [],
       activeCanvasId: null,
       pendingOperations: new Set<string>(),
+      componentHistory: [],
+
+      addToHistory: (component: CanvasComponent) => {
+        set((state) => {
+          // Avoid duplicates in history based on content similarity or ID
+          // For now, simple append
+          return { componentHistory: [component, ...state.componentHistory].slice(0, 50) };
+        });
+      },
 
       // Get all canvases
       getCanvases: () => get().canvases,
@@ -81,7 +92,7 @@ export const useCanvasStore = create<CanvasState>()(
       createCanvas: (name?: string) => {
         const id = generateId();
         const canvases = get().canvases;
-        const canvasName = name || `New Canvas ${canvases.length + 1}`;
+        const canvasName = name || `New Lesson ${canvases.length + 1}`;
         const newCanvas: Canvas = { id, name: canvasName, components: [] };
 
         set((state) => ({
@@ -169,6 +180,15 @@ export const useCanvasStore = create<CanvasState>()(
       // Add a component to a canvas
       addComponent: (canvasId: string, componentProps: CanvasComponent) => {
         const componentId = componentProps.componentId || generateId();
+        const fullComponent = {
+          ...componentProps,
+          componentId,
+          _inCanvas: true,
+          canvasId,
+        };
+
+        // Add to history automatically
+        get().addToHistory(fullComponent);
 
         // Check for duplicate operations
         const operationKey = `add-${componentId}-${canvasId}`;
@@ -206,17 +226,12 @@ export const useCanvasStore = create<CanvasState>()(
           const updatedCanvases = state.canvases.map((c) =>
             c.id === canvasId
               ? {
-                  ...c,
-                  components: [
-                    ...c.components,
-                    {
-                      ...componentProps,
-                      componentId,
-                      _inCanvas: true,
-                      canvasId,
-                    },
-                  ],
-                }
+                ...c,
+                components: [
+                  ...c.components,
+                  fullComponent,
+                ],
+              }
               : c,
           );
 
@@ -265,11 +280,11 @@ export const useCanvasStore = create<CanvasState>()(
           canvases: state.canvases.map((c) =>
             c.id === canvasId
               ? {
-                  ...c,
-                  components: c.components.filter(
-                    (comp) => comp.componentId !== componentId,
-                  ),
-                }
+                ...c,
+                components: c.components.filter(
+                  (comp) => comp.componentId !== componentId,
+                ),
+              }
               : c,
           ),
         }));
@@ -411,6 +426,7 @@ export const useCanvasStore = create<CanvasState>()(
       partialize: (state) => ({
         canvases: state.canvases,
         activeCanvasId: state.activeCanvasId,
+        componentHistory: state.componentHistory,
       }),
     },
   ),

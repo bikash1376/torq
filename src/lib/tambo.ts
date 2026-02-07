@@ -8,17 +8,15 @@
  * Read more about Tambo at https://tambo.co/docs
  */
 
-import { Graph, graphSchema } from "@/components/tambo/graph";
 import { SelectForm, selectFormSchema } from "@/components/tambo/select-form";
-import type { TamboComponent } from "@tambo-ai/react";
-import { TamboTool } from "@tambo-ai/react";
-import { z } from "zod";
-import {
-  getSalesData,
-  getProducts,
-  getUserData,
-  getKPIs,
-} from "@/services/analytics-data";
+// import { TutorConcept, tutorConceptSchema } from "@/components/tutor/tutor-concept";
+import { TutorQuiz, tutorQuizSchema } from "@/components/tutor/tutor-quiz";
+import { TutorMath, tutorMathSchema } from "@/components/tutor/tutor-math";
+import { TutorStepByStep, tutorStepByStepSchema } from "@/components/tutor/tutor-steps";
+// import { showConcept, showConceptSchema, showMath, showMathSchema, showQuiz, showQuizSchema, showSteps, showStepsSchema } from "@/lib/tutor-tools"; // Import the specific tools and schemas
+// Adjusted imports to exclude concept tool
+import { showMath, showMathSchema, showQuiz, showQuizSchema, showSteps, showStepsSchema } from "@/lib/tutor-tools";
+import type { TamboComponent, TamboTool } from "@tambo-ai/react";
 
 /**
  * tools
@@ -29,58 +27,41 @@ import {
  */
 
 export const tools: TamboTool[] = [
+  /*   {
+      name: "showConcept",
+      description: "Use this tool to display a Tutor Concept component on the visual learning board (right side). Use this to explain new topics. Do not render explanations in chat, always use this tool.",
+      tool: showConcept,
+      toolSchema: showConceptSchema,
+    }, */
   {
-    name: "getSalesData",
-    description:
-      "Get monthly sales revenue and units data. Can filter by region (North, South, East, West) or category (Electronics, Clothing, Home)",
-    tool: getSalesData,
-    toolSchema: z.function().args(
-      z
-        .object({
-          region: z.string().optional(),
-          category: z.string().optional(),
-        })
-        .default({}),
-    ),
+    name: "showQuiz",
+    description: "Use this tool to display a Tutor Quiz component on the visual learning board (right side). Use this to test understanding. Note: The showMath tool also supports embedded quizzes in videos, so check if that is more appropriate. Do not render quizzes in chat, always use this tool.",
+    tool: showQuiz,
+    toolSchema: showQuizSchema,
   },
   {
-    name: "getProducts",
-    description:
-      "Get top products with sales and revenue information. Can filter by category (Electronics, Furniture, Appliances)",
-    tool: getProducts,
-    toolSchema: z.function().args(
-      z
-        .object({
-          category: z.string().optional(),
-        })
-        .default({}),
-    ),
+    name: "showSteps",
+    description: "Use this tool to display a Tutor Step-by-Step component on the visual learning board (right side). Use this for guides. Do not render steps in chat, always use this tool.",
+    tool: showSteps,
+    toolSchema: showStepsSchema,
   },
   {
-    name: "getUserData",
-    description:
-      "Get monthly user growth and activity data. Can filter by segment (Free, Premium, Enterprise)",
-    tool: getUserData,
-    toolSchema: z.function().args(
-      z
-        .object({
-          segment: z.string().optional(),
-        })
-        .default({}),
-    ),
-  },
-  {
-    name: "getKPIs",
-    description:
-      "Get key business performance indicators. Can filter by category (Financial, Growth, Quality, Retention, Marketing)",
-    tool: getKPIs,
-    toolSchema: z.function().args(
-      z
-        .object({
-          category: z.string().optional(),
-        })
-        .default({}),
-    ),
+    name: "showMath",
+    description: `Use this tool to display a fun, visual Math Video Lesson WITH AUDIO narration.
+    
+IMPORTANT RULES:
+1. Keep slides SIMPLE - max 2 sentences per slide
+2. Use a relevant emoji for EVERY slide (📐 ✨ 🔢 💡 🎯 etc)
+3. Only 3-5 slides total
+4. Slide types: intro (hook), concept (explain), example (show how)
+5. NO quiz slides in video - add quiz data separately for interactive quiz below video
+6. Titles should be 5 words or less
+7. Content should be catchy and easy to understand
+8. INCLUDE NARRATION for each slide - this is what the AI tutor will SAY out loud. Make it conversational and friendly, like a teacher explaining to a student.
+
+The video has big text, animations, and AUDIO narration that speaks while each slide plays. The quiz appears BELOW as an interactive component.`,
+    tool: showMath,
+    toolSchema: showMathSchema,
   },
 ];
 
@@ -92,12 +73,32 @@ export const tools: TamboTool[] = [
  * can be controlled by AI to dynamically render UI elements based on user interactions.
  */
 export const components: TamboComponent[] = [
+  /*   {
+      name: "TutorConcept",
+      description:
+        "A component to explain concepts. Use the 'showConcept' tool to display this.",
+      component: TutorConcept,
+      propsSchema: tutorConceptSchema,
+    }, */
   {
-    name: "Graph",
+    name: "TutorQuiz",
     description:
-      "Use this when you want to display a chart. It supports bar, line, and pie charts. When you see data generally use this component. IMPORTANT: When asked to create a graph, always generate it first in the chat - do NOT add it directly to the canvas/dashboard. Let the user decide if they want to add it.",
-    component: Graph,
-    propsSchema: graphSchema,
+      "A component for quizzes. Use the 'showQuiz' tool to display this.",
+    component: TutorQuiz,
+    propsSchema: tutorQuizSchema,
+  },
+  {
+    name: "TutorStepByStep",
+    description:
+      "A component for step-by-step guides. Use the 'showSteps' tool to display this.",
+    component: TutorStepByStep,
+    propsSchema: tutorStepByStepSchema,
+  },
+  {
+    name: "TutorMath",
+    description: "A component for math video lessons. Use the 'showMath' tool to display this.",
+    component: TutorMath,
+    propsSchema: tutorMathSchema,
   },
   {
     name: "SelectForm",
@@ -106,5 +107,5 @@ export const components: TamboComponent[] = [
     component: SelectForm,
     propsSchema: selectFormSchema,
   },
-  // Add more components here
 ];
+

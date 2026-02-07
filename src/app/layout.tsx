@@ -11,6 +11,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Torq - AI Learning Tutor",
+  description: "Your personal AI tutor with interactive learning visuals",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

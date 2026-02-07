@@ -64,12 +64,52 @@ export const ComponentsCanvas: React.FC<
 
     // Only create a default canvas if we don't have any in storage
     if (!hasExistingCanvases && canvases.length === 0) {
-      createCanvas("New Canvas 1");
+      createCanvas("New Lesson 1");
     } else if (!activeCanvasId && canvases.length > 0) {
       setActiveCanvas(canvases[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on first mount
+
+  const handleDragEnd = React.useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!activeCanvasId) return;
+
+      // If dropped outside of any droppable, or on the same item, do nothing
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const activeComponentId = active.id as string;
+      const overComponentId = over.id as string;
+
+      // Check if the active item is a component within the active canvas
+      const activeCanvasComponents = canvases.find(c => c.id === activeCanvasId)?.components;
+      const isComponentInActiveCanvas = activeCanvasComponents?.some(comp => comp.componentId === activeComponentId);
+
+      if (isComponentInActiveCanvas) {
+        // This is a reorder within the same canvas
+        moveComponent(activeCanvasId, activeCanvasId, activeComponentId, overComponentId);
+      } else {
+        // This is a drag from the sidebar into the canvas
+        const data = active.data.current as { component: string; props: CanvasComponentProps };
+        if (!data || !data.component || !data.props) return;
+
+        const componentProps = data.props;
+        const componentId = `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+        addComponent(activeCanvasId, {
+          ...componentProps,
+          componentId,
+          _inCanvas: true,
+          _componentType: data.component,
+        }, overComponentId); // Add new component at the position of 'overComponentId'
+      }
+    },
+    [activeCanvasId, canvases, addComponent, moveComponent]
+  );
 
   const handleDrop = React.useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
@@ -180,11 +220,8 @@ export const ComponentsCanvas: React.FC<
     );
 
     if (!componentDef) {
-      return (
-        <div key={componentProps.componentId}>
-          Unknown component type: {componentType}
-        </div>
-      );
+      // Silently skip unknown/deprecated component types (like old TutorConcept)
+      return null;
     }
 
     const Component = componentDef.component;
@@ -211,74 +248,48 @@ export const ComponentsCanvas: React.FC<
     const { canvasId, componentId, _componentType } = componentProps;
 
     return (
-      <div className="relative group">
-        {/* Delete button outside the sortable area */}
-        <div className="absolute -top-2 -right-2 z-50">
-          <button
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (canvasId && componentId) {
-                removeComponent(canvasId, componentId);
-              }
-            }}
-            className="bg-background border border-border rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Remove"
-          >
-            <XIcon className="h-3 w-3" />
-          </button>
+      <div className="relative group border border-transparent hover:border-border/50 rounded-xl transition-all duration-200">
+        {/* Controls - visible on hover */}
+        <div className="absolute -top-3 left-0 right-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+          <div className="bg-background border border-border shadow-sm rounded-full flex overflow-hidden pointer-events-auto">
+            {/* Drag Handle */}
+            <div
+              {...attributes}
+              {...listeners}
+              className="p-1.5 hover:bg-muted cursor-move text-muted-foreground hover:text-foreground border-r border-border"
+              title="Drag to reorder"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1" /><circle cx="9" cy="5" r="1" /><circle cx="9" cy="19" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="5" r="1" /><circle cx="15" cy="19" r="1" /></svg>
+            </div>
+
+            {/* Delete Button */}
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (canvasId && componentId) {
+                  removeComponent(canvasId, componentId);
+                }
+              }}
+              className="p-1.5 hover:bg-red-50 hover:text-red-500 text-muted-foreground transition-colors"
+              title="Remove"
+            >
+              <XIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Sortable content - make it draggable to other canvases */}
+        {/* Component Content - Ref is here for sorting, but listeners are above */}
         <div
           ref={setNodeRef}
           style={style}
-          {...attributes}
-          {...listeners}
-          draggable={true}
-          onDragStart={(e) => {
-            // Set drag data for moving between canvases
-            const dragData = {
-              component: _componentType,
-              props: {
-                ...componentProps,
-                _inCanvas: true,
-                componentId,
-                canvasId,
-              },
-            };
-            e.dataTransfer.setData(
-              "application/json",
-              JSON.stringify(dragData),
-            );
-            e.dataTransfer.effectAllowed = "move";
-          }}
-          className="cursor-move"
+          className="relative"
         >
           {renderComponent(componentProps)}
         </div>
       </div>
     );
   };
-
-  const handleDragEnd = React.useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || !activeCanvasId) return;
-
-      if (active.id !== over.id) {
-        const overIndex = useCanvasStore
-          .getState()
-          .getComponents(activeCanvasId)
-          .findIndex((c) => c.componentId === over.id);
-        if (overIndex === -1) return;
-        useCanvasStore
-          .getState()
-          .reorderComponent(activeCanvasId, active.id as string, overIndex);
-      }
-    },
-    [activeCanvasId],
-  );
 
   const activeCanvas = canvases.find((c) => c.id === activeCanvasId);
 
@@ -387,7 +398,48 @@ export const ComponentsCanvas: React.FC<
         ))}
       </div>
 
-      <div className="absolute top-2 right-2">
+      <div className="absolute top-2 right-2 flex gap-2">
+        {/* History Dropdown */}
+        <div className="relative group/history">
+          <button
+            className="p-1 hover:text-foreground bg-background/80 backdrop-blur-sm rounded border border-transparent hover:border-border transition-all"
+            title="Component History"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /><path d="M12 7v5l4 2" /></svg>
+          </button>
+
+          <div className="absolute right-0 top-full mt-2 w-64 bg-background border border-border rounded-md shadow-lg opacity-0 invisible group-hover/history:opacity-100 group-hover/history:visible transition-all z-50 overflow-hidden">
+            <div className="p-2 border-b border-border bg-muted/50 text-xs font-semibold text-muted-foreground">
+              Recently Generated
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {useCanvasStore.getState().componentHistory?.length > 0 ? (
+                useCanvasStore.getState().componentHistory.map((comp, i) => {
+                  const props = comp as any;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (activeCanvasId) {
+                          addComponent(activeCanvasId, { ...comp, componentId: "" }); // Create new instance
+                        }
+                      }}
+                      className="w-full text-left p-2 text-sm hover:bg-muted transition-colors border-b border-border/50 last:border-0 truncate"
+                    >
+                      {comp._componentType === "TutorConcept" ? "Concept: " + (props.title || "Untitled") :
+                        comp._componentType === "TutorQuiz" ? "Quiz: " + (props.question?.substring(0, 20) || "Untitled") + "..." :
+                          comp._componentType === "TutorStepByStep" ? "Guide: " + (props.title || "Untitled") :
+                            comp._componentType}
+                    </button>
+                  )
+                })
+              ) : (
+                <div className="p-4 text-center text-xs text-muted-foreground">No history yet</div>
+              )}
+            </div>
+          </div>
+        </div>
+
         <button
           onClick={handleCreateCanvas}
           className="p-1 hover:text-foreground bg-background/80 backdrop-blur-sm rounded"
@@ -419,8 +471,9 @@ export const ComponentsCanvas: React.FC<
         )}
       >
         {!activeCanvas || activeCanvas.components.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-            Drag components here
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
+            <p className="font-medium text-lg">Your learning space is empty</p>
+            <p className="text-sm">Ask your AI tutor to explain a concept, give a quiz, or show a step-by-step guide.</p>
           </div>
         ) : (
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>

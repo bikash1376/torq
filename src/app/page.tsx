@@ -15,34 +15,44 @@ export default function Home() {
               className="mb-4"
             />
           </a>
-          <h1 className="text-4xl text-center">tambo analytics template</h1>
+          <h1 className="text-4xl text-center font-bold tracking-tight">Torq - AI Learning Tutor</h1>
         </div>
 
         <div className="w-full space-y-8">
-          <div className="bg-white px-8 py-4">
-            <h2 className="text-xl font-semibold mb-4">Setup Checklist</h2>
+          <div className="bg-white dark:bg-zinc-900 px-8 py-6 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4">Start Learning</h2>
             <ApiKeyCheck>
               <div className="flex gap-4 flex-wrap">
                 <a
                   href="/chat"
-                  className="px-6 py-3 rounded-md font-medium shadow-sm transition-colors text-lg mt-4 bg-[#7FFFC3] hover:bg-[#72e6b0] text-gray-800"
+                  className="px-6 py-3 rounded-md font-medium shadow-sm transition-colors text-lg mt-4 bg-indigo-600 hover:bg-indigo-700 text-white w-full text-center"
                 >
-                  Go to Chat →
+                  Enter Classroom →
                 </a>
               </div>
             </ApiKeyCheck>
           </div>
 
-          <div className="bg-white px-8 py-4">
+          <div className="bg-white dark:bg-zinc-900 px-8 py-6 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
             <h2 className="text-xl font-semibold mb-4">How it works:</h2>
-            <p className="text-gray-600 mb-4">
-              This template demonstrates drag & drop analytics with AI-generated
-              components.
+            <p className="text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+              Experience a personalized learning session where concepts come alive.
             </p>
-            <p className="text-gray-600 mb-4">
-              Ask the AI to create charts and data visualizations, then drag
-              them onto the canvas for organization.
-            </p>
+            <ul className="space-y-3 mb-6">
+              <li className="flex gap-2 text-gray-600 dark:text-gray-300">
+                <span className="text-indigo-500 font-bold">•</span>
+                Ask questions and get interactive explanations
+              </li>
+              <li className="flex gap-2 text-gray-600 dark:text-gray-300">
+                <span className="text-indigo-500 font-bold">•</span>
+                Take quizzes to test your knowledge
+              </li>
+              <li className="flex gap-2 text-gray-600 dark:text-gray-300">
+                <span className="text-indigo-500 font-bold">•</span>
+                Follow step-by-step guides for complex topics
+              </li>
+            </ul>
+
             <div className="flex gap-4 flex-wrap mt-4">
               <a
                 href="https://tambo.co/docs"
