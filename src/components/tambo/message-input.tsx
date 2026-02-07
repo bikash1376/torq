@@ -9,7 +9,7 @@ import { McpConfigModal } from "./mcp-config-modal";
 import {
   Tooltip,
   TooltipProvider,
-} from "@/components/tambo/message-suggestions";
+} from "@/components/tambo/suggestions-tooltip";
 import { cn } from "@/lib/utils";
 import {
   useIsTamboTokenUpdating,

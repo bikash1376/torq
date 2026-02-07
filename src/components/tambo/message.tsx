@@ -1,34 +1,24 @@
 "use client";
 
-import { TamboThreadMessage, useTambo } from "@tambo-ai/react";
+import { markdownComponents } from "@/components/tambo/markdown-components";
+import { generateId, useCanvasStore } from "@/lib/canvas-storage";
+import { components } from "@/lib/tambo";
+import {
+  checkHasContent,
+  getMessageImages,
+  getSafeContent,
+} from "@/lib/thread-hooks";
 import { cn } from "@/lib/utils";
+import type { TamboThreadMessage } from "@tambo-ai/react";
+import { useTambo } from "@tambo-ai/react";
+import type TamboAI from "@tambo-ai/typescript-sdk";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Check, ChevronDown, ExternalLink, Loader2, X } from "lucide-react";
+import stringify from "json-stringify-pretty-compact";
+import { Check, ChevronDown, Loader2, X } from "lucide-react";
+import Image from "next/image";
 import * as React from "react";
+import { useState } from "react";
 import { Streamdown } from "streamdown";
-import {
-  Message as MessageBase,
-  MessageContentProps as MessageBaseContentProps,
-  MessageContentRenderProps as MessageBaseContentRenderProps,
-  MessageImagesProps as MessageBaseImagesProps,
-  MessageRenderedComponentProps as MessageBaseRenderedComponentProps,
-} from "@/components/tambo/base/message";
-import { MessageLoadingIndicatorProps } from "@/components/tambo/base/message/loading-indicator/message-loading-indicator";
-import { MessageRootProps } from "@/components/tambo/base/message/root/message-root";
-import { useMessageRootContext } from "@/components/tambo/base/message/root/message-root-context";
-import {
-  ReasoningInfo as ReasoningInfoBase,
-  ReasoningInfoRootProps,
-} from "@/components/tambo/base/reasoning-info";
-import {
-  ToolcallInfo as ToolcallInfoBase,
-  type ToolcallInfoRootProps as ToolcallInfoBaseRootProps,
-} from "@/components/tambo/base/toolcall-info";
-import { getSafeContent } from "../../lib/thread-hooks";
-import {
-  createMarkdownComponents,
-  markdownComponents,
-} from "./markdown-components";
 
 /**
  * CSS variants for the message container
@@ -55,11 +45,72 @@ const messageVariants = cva("flex", {
 });
 
 /**
- * Props for the Message component.
+ * @typedef MessageContextValue
+ * @property {"user" | "assistant"} role - The role of the message sender.
+ * @property {VariantProps<typeof messageVariants>["variant"]} [variant] - Optional styling variant for the message container.
+ * @property {TamboThreadMessage} message - The full Tambo thread message object.
+ * @property {boolean} [isLoading] - Optional flag to indicate if the message is in a loading state.
  */
-export interface MessageProps extends MessageRootProps {
+interface MessageContextValue {
+  role: "user" | "assistant";
+  variant?: VariantProps<typeof messageVariants>["variant"];
+  message: TamboThreadMessage;
+  isLoading?: boolean;
+}
+
+/**
+ * React Context for sharing message data and settings among sub-components.
+ * @internal
+ */
+const MessageContext = React.createContext<MessageContextValue | null>(null);
+
+/**
+ * Hook to access the message context.
+ * Throws an error if used outside of a Message component.
+ * @returns {MessageContextValue} The message context value.
+ * @throws {Error} If used outside of Message.
+ * @internal
+ */
+const useMessageContext = () => {
+  const context = React.useContext(MessageContext);
+  if (!context) {
+    throw new Error("Message sub-components must be used within a Message");
+  }
+  return context;
+};
+
+/**
+ * Get the tool call request from the message, or the component tool call request
+ *
+ * @param message - The message to get the tool call request from
+ * @returns The tool call request
+ */
+export function getToolCallRequest(
+  message: TamboThreadMessage,
+): TamboAI.ToolCallRequest | undefined {
+  return message.toolCallRequest ?? message.component?.toolCallRequest;
+}
+
+// --- Sub-Components ---
+
+/**
+ * Props for the Message component.
+ * Extends standard HTMLDivElement attributes.
+ */
+export interface MessageProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "content"
+> {
+  /** The role of the message sender ('user' or 'assistant'). */
+  role: "user" | "assistant";
+  /** The full Tambo thread message object. */
+  message: TamboThreadMessage;
   /** Optional styling variant for the message container. */
   variant?: VariantProps<typeof messageVariants>["variant"];
+  /** Optional flag to indicate if the message is in a loading state. */
+  isLoading?: boolean;
+  /** The child elements to render within the root container. Typically includes Message.Bubble and Message.RenderedComponentArea. */
+  children: React.ReactNode;
 }
 
 /**
@@ -75,55 +126,58 @@ export interface MessageProps extends MessageRootProps {
  * ```
  */
 const Message = React.forwardRef<HTMLDivElement, MessageProps>(
-  ({ className, variant, message, children, role, ...props }, ref) => {
+  (
+    { children, className, role, variant, isLoading, message, ...props },
+    ref,
+  ) => {
+    const contextValue = React.useMemo(
+      () => ({ role, variant, isLoading, message }),
+      [role, variant, isLoading, message],
+    );
+
+    // Don't render tool response messages as they're shown in tool call dropdowns
+    if (message.role === "tool") {
+      return null;
+    }
+
     return (
-      <MessageBase.Root
-        ref={ref}
-        className={cn(
-          messageVariants({ variant }),
-          "data-[message-role=assistant]:w-full",
-          className,
-        )}
-        message={message}
-        role={role}
-        {...props}
-      >
-        {children}
-      </MessageBase.Root>
+      <MessageContext.Provider value={contextValue}>
+        <div
+          ref={ref}
+          className={cn(messageVariants({ variant }), className)}
+          data-message-role={role}
+          data-message-id={message.id}
+          {...props}
+        >
+          {children}
+        </div>
+      </MessageContext.Provider>
     );
   },
 );
 Message.displayName = "Message";
 
 /**
- * Loading indicator with bouncing dots animation.
+ * Loading indicator with bouncing dots animation
  *
  * A reusable component that displays three animated dots for loading states.
  * Used in message content and tool status areas.
  *
  * @component
- * @param props - Standard HTML div props
- * @param props.className - Optional CSS classes to apply
- * @returns Animated loading indicator component
+ * @param {React.HTMLAttributes<HTMLDivElement>} props - Standard HTML div props
+ * @param {string} [props.className] - Optional CSS classes to apply
+ * @returns {JSX.Element} Animated loading indicator component
  */
-const LoadingIndicator: React.FC<MessageLoadingIndicatorProps> = ({
+const LoadingIndicator: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   className,
   ...props
 }) => {
   return (
-    <MessageBase.LoadingIndicator
-      className={cn(
-        [
-          "flex items-center gap-1",
-          "*:data-dot:h-1 *:data-dot:w-1 *:data-dot:bg-current *:data-dot:rounded-full *:data-dot:animate-bounce",
-          "*:data-[dot=1]:[animation-delay:-0.3s]",
-          "*:data-[dot=2]:[animation-delay:-0.2s]",
-          "*:data-[dot=3]:[animation-delay:-0.1s]",
-        ],
-        className,
-      )}
-      {...props}
-    />
+    <div className={cn("flex items-center gap-1", className)} {...props}>
+      <span className="w-1 h-1 bg-current rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+      <span className="w-1 h-1 bg-current rounded-full animate-bounce [animation-delay:-0.2s]"></span>
+      <span className="w-1 h-1 bg-current rounded-full animate-bounce [animation-delay:-0.1s]"></span>
+    </div>
   );
 };
 LoadingIndicator.displayName = "LoadingIndicator";
@@ -133,11 +187,11 @@ LoadingIndicator.displayName = "LoadingIndicator";
  */
 function MessageContentRenderer({
   contentToRender,
-  markdownContent,
+  safeContent,
   markdown,
 }: {
   contentToRender: unknown;
-  markdownContent: string;
+  safeContent: string | React.ReactElement;
   markdown: boolean;
 }) {
   if (!contentToRender) {
@@ -148,19 +202,18 @@ function MessageContentRenderer({
   }
   if (markdown) {
     return (
-      <Streamdown components={markdownComponents}>{markdownContent}</Streamdown>
+      <Streamdown components={markdownComponents}>
+        {typeof safeContent === "string" ? safeContent : ""}
+      </Streamdown>
     );
   }
-  return markdownContent;
+  return safeContent;
 }
 
 /**
  * Props for the MessageImages component.
  */
-export type MessageImagesProps = Omit<
-  MessageBaseImagesProps,
-  "renderImage" | "children"
->;
+export type MessageImagesProps = React.HTMLAttributes<HTMLDivElement>;
 
 /**
  * Displays images from message content horizontally.
@@ -168,28 +221,36 @@ export type MessageImagesProps = Omit<
  */
 const MessageImages = React.forwardRef<HTMLDivElement, MessageImagesProps>(
   ({ className, ...props }, ref) => {
+    const { message } = useMessageContext();
+    const images = getMessageImages(message.content);
+
+    if (images.length === 0) {
+      return null;
+    }
+
     return (
-      <MessageBase.Images
+      <div
         ref={ref}
         className={cn("flex flex-wrap gap-2 mb-2", className)}
-        renderImage={({ url, index }) => (
+        data-slot="message-images"
+        {...props}
+      >
+        {images.map((imageUrl: string, index: number) => (
           <div
             key={index}
             className="w-32 h-32 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
           >
-            <img
-              src={url}
+            <Image
+              src={imageUrl}
               alt={`Image ${index + 1}`}
               width={128}
               height={128}
-              loading="lazy"
-              decoding="async"
               className="w-full h-full object-cover"
+              unoptimized
             />
           </div>
-        )}
-        {...props}
-      />
+        ))}
+      </div>
     );
   },
 );
@@ -197,8 +258,17 @@ MessageImages.displayName = "MessageImages";
 
 /**
  * Props for the MessageContent component.
+ * Extends standard HTMLDivElement attributes.
  */
-export type MessageContentProps = Omit<MessageBaseContentProps, "children">;
+export interface MessageContentProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "content"
+> {
+  /** Optional override for the message content. If not provided, uses the content from the message object in the context. */
+  content?: string | { type: string; text?: string }[];
+  /** Optional flag to render as Markdown. Default is true. */
+  markdown?: boolean;
+}
 
 /**
  * Displays the message content with optional markdown formatting.
@@ -206,56 +276,57 @@ export type MessageContentProps = Omit<MessageBaseContentProps, "children">;
  * @component MessageContent
  */
 const MessageContent = React.forwardRef<HTMLDivElement, MessageContentProps>(
-  ({ className, content, markdown = true, ...props }, ref) => {
+  (
+    { className, children, content: contentProp, markdown = true, ...props },
+    ref,
+  ) => {
+    const { message, isLoading } = useMessageContext();
+    const contentToRender = children ?? contentProp ?? message.content;
+
+    const safeContent = React.useMemo(
+      () => getSafeContent(contentToRender as TamboThreadMessage["content"]),
+      [contentToRender],
+    );
+    const hasContent = React.useMemo(
+      () => checkHasContent(contentToRender as TamboThreadMessage["content"]),
+      [contentToRender],
+    );
+
+    const showLoading = isLoading && !hasContent;
+
     return (
-      <MessageBase.Content
+      <div
         ref={ref}
         className={cn(
           "relative block rounded-3xl px-4 py-2 text-[15px] leading-relaxed transition-all duration-200 font-medium max-w-full [&_p]:py-1 [&_li]:list-item",
           className,
         )}
-        content={content}
-        markdown={markdown}
-        render={({
-          content: contentToRender,
-          markdownContent,
-          markdown,
-          isLoading,
-          isCancelled,
-          isReasoning,
-        }: MessageBaseContentRenderProps) => {
-          if (isLoading && !isReasoning) {
-            return (
-              <div
-                className="flex items-center justify-start h-4 py-1"
-                data-slot="message-loading-indicator"
-              >
-                <LoadingIndicator />
-              </div>
-            );
-          }
-
-          return (
-            <div
-              className={cn(
-                "wrap-break-word",
-                !markdown && "whitespace-pre-wrap",
-              )}
-              data-slot="message-content-text"
-            >
-              <MessageContentRenderer
-                contentToRender={contentToRender}
-                markdownContent={markdownContent}
-                markdown={markdown}
-              />
-              {isCancelled && (
-                <span className="text-muted-foreground text-xs">cancelled</span>
-              )}
-            </div>
-          );
-        }}
+        data-slot="message-content"
         {...props}
-      />
+      >
+        {showLoading && !message.reasoning ? (
+          <div
+            className="flex items-center justify-start h-4 py-1"
+            data-slot="message-loading-indicator"
+          >
+            <LoadingIndicator />
+          </div>
+        ) : (
+          <div
+            className={cn("break-words", !markdown && "whitespace-pre-wrap")}
+            data-slot="message-content-text"
+          >
+            <MessageContentRenderer
+              contentToRender={contentToRender}
+              safeContent={safeContent}
+              markdown={markdown}
+            />
+            {message.isCancelled && (
+              <span className="text-muted-foreground text-xs">cancelled</span>
+            )}
+          </div>
+        )}
+      </div>
     );
   },
 );
@@ -263,125 +334,53 @@ MessageContent.displayName = "MessageContent";
 
 /**
  * Props for the ToolcallInfo component.
+ * Extends standard HTMLDivElement attributes.
  */
 export interface ToolcallInfoProps extends Omit<
-  ToolcallInfoBaseRootProps,
-  "children" | "message"
+  React.HTMLAttributes<HTMLDivElement>,
+  "content"
 > {
   /** Optional flag to render response content as Markdown. Default is true. */
   markdown?: boolean;
 }
 
-const toolStatusIconClassName = cva("h-3 w-3 text-bold", {
-  variants: {
-    status: {
-      error: "text-red-500",
-      loading: "text-muted-foreground animate-spin",
-      success: "text-green-500",
-    },
-  },
-  defaultVariants: {
-    status: "success",
-  },
-});
-
-function ToolcallStatusIcon() {
-  return (
-    <ToolcallInfoBase.StatusIcon
-      render={({ status }) => {
-        let Icon = Check;
-        if (status === "error") Icon = X;
-        if (status === "loading") Icon = Loader2;
-        return <Icon className={toolStatusIconClassName({ status })} />;
-      }}
-    />
-  );
-}
-
-function ToolResultDisplay({
-  content,
-  hasResult,
-  enableMarkdown,
-}: {
-  content: TamboThreadMessage["content"] | null;
-  hasResult: boolean;
-  enableMarkdown: boolean;
-}) {
-  if (!hasResult) {
-    return <span className="text-muted-foreground italic">Empty response</span>;
-  }
-  if (!content) {
+function getToolStatusMessage(
+  message: TamboThreadMessage,
+  isLoading: boolean | undefined,
+) {
+  if (message.role !== "assistant" || !getToolCallRequest(message)) {
     return null;
   }
-  return (
-    <ToolResultContent content={content} enableMarkdown={enableMarkdown} />
-  );
+
+  const toolCallMessage = isLoading
+    ? `Calling ${getToolCallRequest(message)?.toolName ?? "tool"}`
+    : `Called ${getToolCallRequest(message)?.toolName ?? "tool"}`;
+  const toolStatusMessage = isLoading
+    ? message.component?.statusMessage
+    : message.component?.completionStatusMessage;
+  return toolStatusMessage ?? toolCallMessage;
 }
 
-function ToolcallInfoContent({
-  markdown,
-  message,
+/**
+ * Internal component to render tool call status icon
+ */
+function ToolcallStatusIcon({
+  hasToolError,
+  isLoading,
 }: {
-  markdown: boolean;
-  message: TamboThreadMessage;
+  hasToolError: boolean | undefined;
+  isLoading: boolean | undefined;
 }) {
-  return (
-    <ToolcallInfoBase.Content
-      forceMount
-      className={cn(
-        "flex flex-col gap-1 p-3 pl-7 overflow-auto transition-[max-height,opacity,padding] duration-300 w-full truncate",
-        "data-[state=open]:max-h-auto data-[state=open]:opacity-100",
-        "data-[state=closed]:max-h-0 data-[state=closed]:opacity-0 data-[state=closed]:p-0",
-      )}
-    >
-      <ToolcallInfoBase.ToolName
-        className="whitespace-pre-wrap pl-2"
-        render={({ toolName }) => `tool: ${toolName}`}
-      />
-      <ToolcallInfoBase.Parameters
-        className="whitespace-pre-wrap pl-2"
-        render={({ parametersString }) => `parameters:\n${parametersString}`}
-      />
-      <SamplingSubThread parentMessageId={message.id} />
-      <ToolcallInfoBase.Result className="pl-2">
-        {({ content, hasResult }) => (
-          <>
-            <span className="whitespace-pre-wrap">result:</span>
-            <div>
-              <ToolResultDisplay
-                content={content}
-                hasResult={hasResult}
-                enableMarkdown={markdown}
-              />
-            </div>
-          </>
-        )}
-      </ToolcallInfoBase.Result>
-    </ToolcallInfoBase.Content>
-  );
+  if (hasToolError) {
+    return <X className="w-3 h-3 text-bold text-red-500" />;
+  }
+  if (isLoading) {
+    return (
+      <Loader2 className="w-3 h-3 text-muted-foreground text-bold animate-spin" />
+    );
+  }
+  return <Check className="w-3 h-3 text-bold text-green-500" />;
 }
-
-type ToolcallInfoTriggerProps = React.ComponentProps<
-  typeof ToolcallInfoBase.Trigger
->;
-const ToolcallInfoTrigger = React.forwardRef<
-  HTMLButtonElement,
-  ToolcallInfoTriggerProps
->(function ToolcallInfoTrigger({ children, className, ...props }, ref) {
-  return (
-    <ToolcallInfoBase.Trigger
-      ref={ref}
-      className={cn(
-        "group/trigger flex items-center gap-1 cursor-pointer hover:bg-muted rounded-md p-1 select-none w-fit",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </ToolcallInfoBase.Trigger>
-  );
-});
-ToolcallInfoTrigger.displayName = "ToolcallInfoTrigger";
 
 /**
  * Displays tool call information in a collapsible dropdown.
@@ -390,33 +389,116 @@ ToolcallInfoTrigger.displayName = "ToolcallInfoTrigger";
  */
 const ToolcallInfo = React.forwardRef<HTMLDivElement, ToolcallInfoProps>(
   ({ className, markdown = true, ...props }, ref) => {
-    const { message } = useMessageRootContext();
+    const [isExpanded, setIsExpanded] = useState(false);
+    const { message, isLoading } = useMessageContext();
+    const { thread } = useTambo();
+    const toolDetailsId = React.useId();
+
+    const associatedToolResponse = React.useMemo(() => {
+      if (!thread?.messages) return null;
+      const currentMessageIndex = thread.messages.findIndex(
+        (m: TamboThreadMessage) => m.id === message.id,
+      );
+      if (currentMessageIndex === -1) return null;
+      for (let i = currentMessageIndex + 1; i < thread.messages.length; i++) {
+        const nextMessage = thread.messages[i];
+        if (nextMessage.role === "tool") {
+          return nextMessage;
+        }
+        if (
+          nextMessage.role === "assistant" &&
+          getToolCallRequest(nextMessage)
+        ) {
+          break;
+        }
+      }
+      return null;
+    }, [message, thread?.messages]);
+
+    if (message.role !== "assistant" || !getToolCallRequest(message)) {
+      return null;
+    }
+
+    const toolCallRequest: TamboAI.ToolCallRequest | undefined =
+      getToolCallRequest(message);
+    const hasToolError = !!message.error;
+
+    const toolStatusMessage = getToolStatusMessage(message, isLoading);
+
     return (
-      <ToolcallInfoBase.Root
+      <div
         ref={ref}
-        message={message}
         className={cn(
           "flex flex-col items-start text-xs opacity-50",
           className,
         )}
+        data-slot="toolcall-info"
         {...props}
       >
         <div className="flex flex-col w-full">
-          <ToolcallInfoTrigger>
-            <ToolcallStatusIcon />
-            <ToolcallInfoBase.StatusText />
-            <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=closed]/trigger:-rotate-90" />
-          </ToolcallInfoTrigger>
-          <ToolcallInfoContent markdown={markdown} message={message} />
+          <button
+            type="button"
+            aria-expanded={isExpanded}
+            aria-controls={toolDetailsId}
+            onClick={() => setIsExpanded(!isExpanded)}
+            className={cn(
+              "flex items-center gap-1 cursor-pointer hover:bg-gray-100 rounded-md p-1 select-none w-fit",
+            )}
+          >
+            <ToolcallStatusIcon
+              hasToolError={hasToolError}
+              isLoading={isLoading}
+            />
+            <span>{toolStatusMessage}</span>
+            <ChevronDown
+              className={cn(
+                "w-3 h-3 transition-transform duration-200",
+                !isExpanded && "-rotate-90",
+              )}
+            />
+          </button>
+          <div
+            id={toolDetailsId}
+            className={cn(
+              "flex flex-col gap-1 p-3 pl-7 overflow-auto transition-[max-height,opacity,padding] duration-300 w-full truncate",
+              isExpanded ? "max-h-auto opacity-100" : "max-h-0 opacity-0 p-0",
+            )}
+          >
+            <span className="whitespace-pre-wrap pl-2">
+              tool: {toolCallRequest?.toolName}
+            </span>
+            <span className="whitespace-pre-wrap pl-2">
+              parameters:{"\n"}
+              {stringify(keyifyParameters(toolCallRequest?.parameters))}
+            </span>
+            <SamplingSubThread parentMessageId={message.id} />
+            {associatedToolResponse && (
+              <div className="pl-2">
+                <span className="whitespace-pre-wrap">result:</span>
+                <div>
+                  {!associatedToolResponse.content ? (
+                    <span className="text-muted-foreground italic">
+                      Empty response
+                    </span>
+                  ) : (
+                    formatToolResult(associatedToolResponse.content, markdown)
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </ToolcallInfoBase.Root>
+      </div>
     );
   },
 );
+
 ToolcallInfo.displayName = "ToolcallInfo";
+
 /**
  * Displays a message's child messages in a collapsible dropdown.
  * Used for MCP sampling sub-threads.
+ * @component SamplingSubThread
  */
 const SamplingSubThread = ({
   parentMessageId,
@@ -426,7 +508,7 @@ const SamplingSubThread = ({
   titleText?: string;
 }) => {
   const { thread } = useTambo();
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const samplingDetailsId = React.useId();
 
   const childMessages = React.useMemo(() => {
@@ -491,10 +573,11 @@ SamplingSubThread.displayName = "SamplingSubThread";
 
 /**
  * Props for the ReasoningInfo component.
+ * Extends standard HTMLDivElement attributes.
  */
 export type ReasoningInfoProps = Omit<
-  ReasoningInfoRootProps,
-  "children" | "message"
+  React.HTMLAttributes<HTMLDivElement>,
+  "content"
 >;
 
 /**
@@ -504,302 +587,402 @@ export type ReasoningInfoProps = Omit<
  */
 const ReasoningInfo = React.forwardRef<HTMLDivElement, ReasoningInfoProps>(
   ({ className, ...props }, ref) => {
-    const { message, isLoading } = useMessageRootContext();
+    const { message, isLoading } = useMessageContext();
+    const reasoningDetailsId = React.useId();
+    const [isExpanded, setIsExpanded] = useState(true);
+    const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+    // Auto-collapse when content arrives and reasoning is not loading
+    React.useEffect(() => {
+      if (checkHasContent(message.content) && !isLoading) {
+        setIsExpanded(false);
+      }
+    }, [message.content, isLoading]);
+
+    // Auto-scroll to bottom when reasoning content changes
+    React.useEffect(() => {
+      if (scrollContainerRef.current && isExpanded && message.reasoning) {
+        const scroll = () => {
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({
+              top: scrollContainerRef.current.scrollHeight,
+              behavior: "smooth",
+            });
+          }
+        };
+
+        if (isLoading) {
+          // During streaming, scroll immediately
+          requestAnimationFrame(scroll);
+        } else {
+          // For other updates, use a short delay to batch rapid changes
+          const timeoutId = setTimeout(scroll, 50);
+          return () => clearTimeout(timeoutId);
+        }
+      }
+    }, [message.reasoning, isExpanded, isLoading]);
+
+    // Only show if there's reasoning data
+    if (!message.reasoning?.length) {
+      return null;
+    }
+
     return (
-      <ReasoningInfoBase.Root
+      <div
         ref={ref}
         className={cn(
           "flex flex-col items-start text-xs opacity-50",
           className,
         )}
-        isLoading={isLoading}
-        message={message}
+        data-slot="reasoning-info"
         {...props}
       >
         <div className="flex flex-col w-full">
-          <ReasoningInfoBase.Trigger
-            className={
-              "group/trigger flex items-center gap-1 cursor-pointer hover:bg-muted-foreground/10 rounded-md px-3 py-1 select-none w-fit"
-            }
-          >
-            <ReasoningInfoBase.StatusText
-              className={"data-loading:animate-thinking-gradient"}
-            />
-            <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=closed]/trigger:-rotate-90" />
-          </ReasoningInfoBase.Trigger>
-          <ReasoningInfoBase.Content
-            forceMount
+          <button
+            type="button"
+            aria-expanded={isExpanded}
+            aria-controls={reasoningDetailsId}
+            onClick={() => setIsExpanded(!isExpanded)}
             className={cn(
-              "flex flex-col gap-1 px-3 py-3 overflow-auto transition-[max-height,opacity,padding] duration-300 w-full",
-              "data-[state=open]:max-h-96 data-[state=open]:opacity-100",
-              "data-[state=closed]:max-h-0 data-[state=closed]:opacity-0 data-[state=closed]:p-0",
+              "flex items-center gap-1 cursor-pointer hover:bg-muted-foreground/10 rounded-md px-3 py-1 select-none w-fit",
             )}
           >
-            <ReasoningInfoBase.Steps
-              className="space-y-4"
-              render={({ steps, showStepNumbers }) =>
-                steps.map((reasoningStep, index) => (
-                  <div key={index} className="flex flex-col gap-1">
-                    {showStepNumbers && (
-                      <span className="text-muted-foreground text-xs font-medium">
-                        Step {index + 1}:
-                      </span>
-                    )}
-                    {reasoningStep && (
-                      <div className="bg-muted/50 rounded-md p-3 text-xs overflow-x-auto overflow-y-auto max-w-full">
-                        <div className="whitespace-pre-wrap wrap-break-word">
-                          <Streamdown components={markdownComponents}>
-                            {reasoningStep}
-                          </Streamdown>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              }
+            <span className={isLoading ? "animate-thinking-gradient" : ""}>
+              <ReasoningStatusText
+                isLoading={isLoading}
+                reasoningDurationMS={message.reasoningDurationMS}
+                reasoningSteps={message.reasoning.length}
+              />
+            </span>
+            <ChevronDown
+              className={cn(
+                "w-3 h-3 transition-transform duration-200",
+                !isExpanded && "-rotate-90",
+              )}
             />
-          </ReasoningInfoBase.Content>
+          </button>
+          <div
+            ref={scrollContainerRef}
+            id={reasoningDetailsId}
+            className={cn(
+              "flex flex-col gap-1 px-3 py-3 overflow-auto transition-[max-height,opacity,padding] duration-300 w-full",
+              isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0 p-0",
+            )}
+          >
+            {message.reasoning.map((reasoningStep, index) => (
+              <div key={index} className="flex flex-col gap-1">
+                {message.reasoning?.length && message.reasoning.length > 1 && (
+                  <span className="text-muted-foreground text-xs font-medium">
+                    Step {index + 1}:
+                  </span>
+                )}
+                {reasoningStep ? (
+                  <div className="bg-muted/50 rounded-md p-3 text-xs overflow-x-auto overflow-y-auto max-w-full">
+                    <div className="whitespace-pre-wrap break-words">
+                      <Streamdown components={markdownComponents}>
+                        {reasoningStep}
+                      </Streamdown>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
-      </ReasoningInfoBase.Root>
+      </div>
     );
   },
 );
+
 ReasoningInfo.displayName = "ReasoningInfo";
 
-/**
- * Renders an image from a tool result.
- */
-function ToolResultImage({ url, index }: { url: string; index: number }) {
-  return (
-    <div className="rounded-md overflow-hidden shadow-sm max-w-xs">
-      <img
-        src={url}
-        alt={`Tool result image ${index + 1}`}
-        loading="lazy"
-        decoding="async"
-        className="max-w-full h-auto object-contain"
-      />
-    </div>
+function keyifyParameters(parameters: TamboAI.ToolCallParameter[] | undefined) {
+  if (!parameters) return;
+  return Object.fromEntries(
+    parameters.map((p) => [p.parameterName, p.parameterValue]),
   );
 }
 
-interface ToolResultResourceProps {
-  resource: {
-    uri?: string;
-    text?: string;
-    blob?: string;
-    name?: string;
-    mimeType?: string;
-  };
-  index: number;
-}
-
 /**
- * Renders a resource from a tool result.
- * Handles text, blob (images), and URI resources.
+ * Internal component to render reasoning status text
  */
-function ToolResultResource({ resource, index }: ToolResultResourceProps) {
-  // Handle blob content (e.g., base64-encoded images)
-  if (resource.blob && resource.mimeType?.startsWith("image/")) {
-    const dataUrl = `data:${resource.mimeType};base64,${resource.blob}`;
-    return (
-      <div className="rounded-md overflow-hidden shadow-sm max-w-xs">
-        <img
-          src={dataUrl}
-          alt={resource.name ?? `Resource image ${index + 1}`}
-          loading="lazy"
-          decoding="async"
-          className="max-w-full h-auto object-contain"
-        />
-      </div>
-    );
-  }
-
-  // Handle text content
-  if (resource.text) {
-    return (
-      <div className="whitespace-pre-wrap">
-        {resource.name && (
-          <span className="font-medium text-muted-foreground">
-            {resource.name}:{" "}
-          </span>
-        )}
-        {resource.text}
-      </div>
-    );
-  }
-
-  // Handle URI reference
-  if (resource.uri) {
-    return (
-      <div className="flex items-center gap-1">
-        <span className="font-medium text-muted-foreground">
-          {resource.name ?? "Resource"}:
-        </span>
-        <span className="font-mono text-xs truncate">{resource.uri}</span>
-      </div>
-    );
-  }
-
-  return null;
-}
-
-/**
- * Renders tool result content with appropriate formatting.
- * Handles text (with JSON pretty-printing), images, and MCP resources.
- */
-function ToolResultContent({
-  content,
-  enableMarkdown = true,
+function ReasoningStatusText({
+  isLoading,
+  reasoningDurationMS,
+  reasoningSteps,
 }: {
-  content: TamboThreadMessage["content"];
-  enableMarkdown?: boolean;
+  isLoading: boolean | undefined;
+  reasoningDurationMS?: number;
+  reasoningSteps: number;
 }) {
-  if (!content) return null;
+  let statusText: string;
+  if (isLoading) {
+    statusText = "Thinking ";
+  } else if (reasoningDurationMS) {
+    statusText = formatReasoningDuration(reasoningDurationMS) + " ";
+  } else {
+    statusText = "Done Thinking ";
+  }
 
-  // Handle string content directly
+  return (
+    <>
+      {statusText}
+      {reasoningSteps > 1 ? `(${reasoningSteps} steps)` : ""}
+    </>
+  );
+}
+
+/**
+ * Formats the reasoning duration in a human-readable format
+ * @param durationMS - The duration in milliseconds
+ * @returns The formatted duration string
+ */
+function formatReasoningDuration(durationMS: number) {
+  const seconds = Math.floor(Math.max(0, durationMS) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (seconds < 1) return "Thought for less than 1 second";
+  if (seconds < 60)
+    return `Thought for ${seconds} ${seconds === 1 ? "second" : "seconds"}`;
+  if (minutes < 60)
+    return `Thought for ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+  return `Thought for ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+/**
+ * Helper function to detect if content is JSON and format it nicely
+ * @param content - The content to check and format
+ * @returns Formatted content or original content if not JSON
+ */
+function formatToolResult(
+  content: TamboThreadMessage["content"],
+  enableMarkdown = true,
+): React.ReactNode {
+  if (!content) return content;
+
+  // First check if content can be converted to a string for JSON parsing
+  let contentString: string | null = null;
   if (typeof content === "string") {
-    return <ToolResultText text={content} enableMarkdown={enableMarkdown} />;
+    contentString = content;
+  } else if (Array.isArray(content)) {
+    contentString = content
+      .map((item) => {
+        if (item?.type === "text") {
+          return item.text ?? "";
+        }
+        return "";
+      })
+      .join("");
   }
 
-  // Handle array content with mixed types
-  if (Array.isArray(content)) {
-    const textParts: string[] = [];
-    const nonTextItems: Array<{
-      type: "image" | "resource";
-      url?: string;
-      resource?: ToolResultResourceProps["resource"];
-      index: number;
-    }> = [];
-
-    content.forEach((item, index) => {
-      if (!item?.type) return;
-
-      if (item.type === "text" && item.text) {
-        textParts.push(item.text);
-      } else if (item.type === "image_url" && item.image_url?.url) {
-        nonTextItems.push({ type: "image", url: item.image_url.url, index });
-      } else if (item.type === "resource" && item.resource) {
-        nonTextItems.push({ type: "resource", resource: item.resource, index });
-      }
-    });
-
-    const combinedText = textParts.join("");
-
-    // If we only have text, return it directly
-    if (nonTextItems.length === 0) {
-      return combinedText ? (
-        <ToolResultText text={combinedText} enableMarkdown={enableMarkdown} />
-      ) : null;
+  // Try to parse as JSON if we have a string
+  if (contentString) {
+    try {
+      const parsed = JSON.parse(contentString);
+      return (
+        <pre
+          className={cn(
+            "bg-muted/50 rounded-md p-3 text-xs overflow-x-auto overflow-y-auto max-w-full max-h-64",
+          )}
+        >
+          <code className="font-mono break-words whitespace-pre-wrap">
+            {JSON.stringify(parsed, null, 2)}
+          </code>
+        </pre>
+      );
+    } catch {
+      // JSON parsing failed, render as markdown or plain text
+      if (!enableMarkdown) return contentString;
+      return (
+        <Streamdown components={markdownComponents}>{contentString}</Streamdown>
+      );
     }
-
-    // If we have mixed content, render in a flex container
-    return (
-      <div className="flex flex-col gap-2">
-        {combinedText && (
-          <ToolResultText text={combinedText} enableMarkdown={enableMarkdown} />
-        )}
-        <div className="flex flex-wrap gap-2">
-          {nonTextItems.map((item) => {
-            switch (item.type) {
-              case "image":
-                return item.url ? (
-                  <ToolResultImage
-                    key={`image-${item.index}`}
-                    url={item.url}
-                    index={item.index}
-                  />
-                ) : null;
-              case "resource":
-                return item.resource ? (
-                  <ToolResultResource
-                    key={`resource-${item.index}`}
-                    resource={item.resource}
-                    index={item.index}
-                  />
-                ) : null;
-            }
-          })}
-        </div>
-      </div>
-    );
   }
 
-  // Fallback for unknown content types
+  // If content is not a string or array, use getSafeContent as fallback
   return getSafeContent(content);
 }
 
 /**
- * Renders text content, attempting JSON parsing for pretty-printing.
+ * Props for the MessageRenderedComponentArea component.
+ * Extends standard HTMLDivElement attributes.
  */
-function ToolResultText({
-  text,
-  enableMarkdown,
-}: {
-  text: string;
-  enableMarkdown: boolean;
-}) {
-  if (!text) return null;
+export type MessageRenderedComponentAreaProps =
+  React.HTMLAttributes<HTMLDivElement>;
 
-  try {
-    const parsed = JSON.parse(text);
-    return (
-      <pre
-        className={cn(
-          "bg-muted/50 rounded-md p-3 text-xs overflow-x-auto overflow-y-auto max-w-full max-h-64",
-        )}
-      >
-        <code className="font-mono wrap-break-word whitespace-pre-wrap">
-          {JSON.stringify(parsed, null, 2)}
-        </code>
-      </pre>
-    );
-  } catch {
-    // JSON parsing failed, render as markdown or plain text
-    if (!enableMarkdown) return text;
-    return <Streamdown components={markdownComponents}>{text}</Streamdown>;
+/**
+ * Helper function to extract component type and props from rendered component
+ */
+function extractComponentInfo(renderedComponent: React.ReactNode): {
+  componentType: string;
+  componentProps: Record<string, unknown>;
+} {
+  let componentType = "unknown";
+  let componentProps: Record<string, unknown> = {};
+
+  const wrapperElement = renderedComponent as React.ReactElement;
+
+  if (
+    React.isValidElement(wrapperElement) &&
+    (wrapperElement as { props?: { children?: React.ReactElement } }).props
+      ?.children
+  ) {
+    const actualComponent = (
+      wrapperElement as { props: { children: React.ReactElement } }
+    ).props.children as React.ReactElement;
+
+    if (React.isValidElement(actualComponent)) {
+      const matchedComponent = components.find(
+        (comp) => comp.component === actualComponent.type,
+      );
+      if (matchedComponent) {
+        componentType = matchedComponent.name;
+      } else if (typeof actualComponent.type === "function") {
+        const typeFunc = actualComponent.type as React.ComponentType<unknown> & {
+          displayName?: string;
+          name?: string;
+        };
+        const funcName = typeFunc.displayName || typeFunc.name || "unknown";
+        componentType = funcName === "Graph" ? "Graph" : funcName;
+      }
+
+      if (actualComponent.props) {
+        // Normalize props for Graph so subsequent edits (title/type)
+        // via CanvasDetails work whether the component was added by
+        // button or drag-and-drop.
+        if (componentType === "Graph") {
+          const { data, title, showLegend, variant, size, className } =
+            actualComponent.props as Record<string, unknown>;
+          componentProps = {
+            data,
+            title,
+            showLegend,
+            variant,
+            size,
+            className,
+          };
+        } else {
+          componentProps = { ...actualComponent.props };
+        }
+      }
+    }
   }
+
+  return { componentType, componentProps };
 }
 
 /**
- * Props for the MessageRenderedComponent component.
+ * Check if a component type supports drag/drop to canvas
+ * Only Graph components should be draggable to the canvas
  */
-export type MessageRenderedComponentAreaProps = Omit<
-  MessageBaseRenderedComponentProps,
-  "children"
->;
+function isDraggableComponent(componentType: string): boolean {
+  return componentType === "Graph";
+}
 
 /**
  * Displays the `renderedComponent` associated with an assistant message.
  * Shows a button to view in canvas if a canvas space exists, otherwise renders inline.
  * Only renders if the message role is 'assistant' and `message.renderedComponent` exists.
+ * @component Message.RenderedComponentArea
  */
 const MessageRenderedComponentArea = React.forwardRef<
   HTMLDivElement,
   MessageRenderedComponentAreaProps
->(({ className, ...props }, ref) => {
+>(({ className, children, ...props }, ref) => {
+  const { message, role } = useMessageContext();
+  const { addComponent, activeCanvasId, createCanvas } = useCanvasStore();
+
+  // Extract component info once to check if it's draggable
+  const { componentType, componentProps } = React.useMemo(
+    () => extractComponentInfo(message.renderedComponent),
+    [message.renderedComponent],
+  );
+  const canDrag = isDraggableComponent(componentType);
+
+  const addToDashboard = React.useCallback(() => {
+    let targetCanvasId = activeCanvasId;
+    if (!targetCanvasId) {
+      const newCanvas = createCanvas();
+      targetCanvasId = newCanvas.id;
+    }
+
+    if (!targetCanvasId) return;
+
+    const componentId = generateId();
+    addComponent(targetCanvasId, {
+      ...componentProps,
+      componentId,
+      _inCanvas: true,
+      _componentType: componentType,
+    });
+  }, [componentType, componentProps, activeCanvasId, addComponent, createCanvas]);
+
+  const handleDragStart = React.useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      const dragData = {
+        component: componentType,
+        props: {
+          ...componentProps,
+          componentId: `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          _inCanvas: false,
+          _componentType: componentType,
+        },
+      };
+      e.dataTransfer.setData("application/json", JSON.stringify(dragData));
+      e.dataTransfer.effectAllowed = "copy";
+    },
+    [componentType, componentProps],
+  );
+
+  if (
+    !message.renderedComponent ||
+    role !== "assistant" ||
+    message.isCancelled
+  ) {
+    return null;
+  }
+
   return (
-    <MessageBase.RenderedComponent
+    <div
       ref={ref}
       className={cn(className)}
+      data-slot="message-rendered-component-area"
       {...props}
     >
-      <div className="flex justify-start pl-4">
-        <MessageBase.RenderedComponentCanvasButton className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-200 cursor-pointer group">
-          View component
-          <ExternalLink className="w-3.5 h-3.5" />
-        </MessageBase.RenderedComponentCanvasButton>
-      </div>
-      <MessageBase.RenderedComponentContent className="w-full pt-2 px-2" />
-    </MessageBase.RenderedComponent>
+      {children ??
+        (canDrag ? (
+          <div>
+            <div className="flex justify-start pl-2 gap-3">
+              <button
+                onClick={addToDashboard}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-200 cursor-pointer group"
+                aria-label="Add component to dashboard"
+              >
+                Add to dashboard
+              </button>
+            </div>
+            <div
+              className="w-full pt-2 px-2 cursor-move"
+              draggable={true}
+              onDragStart={handleDragStart}
+            >
+              {message.renderedComponent}
+            </div>
+          </div>
+        ) : (
+          <div className="w-full pt-2 px-2">
+            {message.renderedComponent}
+          </div>
+        ))}
+    </div>
   );
 });
 MessageRenderedComponentArea.displayName = "Message.RenderedComponentArea";
 
+// --- Exports ---
 export {
-  createMarkdownComponents,
   LoadingIndicator,
-  markdownComponents,
   Message,
   MessageContent,
   MessageImages,
