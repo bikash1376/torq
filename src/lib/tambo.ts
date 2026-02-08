@@ -16,7 +16,10 @@ import { TutorStepByStep, tutorStepByStepSchema } from "@/components/tutor/tutor
 import { WebSearch, webSearchSchema } from "@/components/tutor/web-search";
 // import { showConcept, showConceptSchema, showMath, showMathSchema, showQuiz, showQuizSchema, showSteps, showStepsSchema } from "@/lib/tutor-tools"; // Import the specific tools and schemas
 // Adjusted imports to exclude concept tool
-import { showMath, showMathSchema, showQuiz, showQuizSchema, showSteps, showStepsSchema, webSearch, webSearchToolSchema } from "@/lib/tutor-tools";
+import { showMath, showMathSchema, showQuiz, showQuizSchema, showSteps, showStepsSchema, showFullQuiz, showFullQuizSchema, showGame, showGameSchema, showFlashcards, showFlashcardsSchema, webSearch, webSearchToolSchema } from "@/lib/tutor-tools";
+import { TutorFullQuiz, tutorFullQuizSchema } from "@/components/tutor/tutor-full-quiz";
+import { TutorGame, tutorGameSchema } from "@/components/tutor/tutor-game";
+import { TutorFlashcards, tutorFlashcardsSchema } from "@/components/tutor/tutor-flashcards";
 import type { TamboComponent, TamboTool } from "@tambo-ai/react";
 
 /**
@@ -41,6 +44,33 @@ export const tools: TamboTool[] = [
 Do NOT use this for teaching - use showMath instead. This is only for standalone quizzes when the user says "quiz me" or "test me".`,
     tool: showQuiz,
     toolSchema: showQuizSchema,
+  },
+  {
+    name: "showFullQuiz",
+    description: `Use this tool when the user asks for a FULL quiz, exam, or test with multiple questions (default 10).
+    
+    This tool creates a comprehensive 10-question quiz with scoring/results at the end. Use for "create a quiz on X", "test me on X", "give me an exam".`,
+    tool: showFullQuiz,
+    toolSchema: showFullQuizSchema,
+  },
+  {
+    name: "showGame",
+    description: `Use this tool when the user asks for an INTERACTIVE GAME or simulation to learn a concept.
+    
+    This tool allows you to generate a custom HTML5/Canvas game or interactive simulation.
+    You must provide the full HTML, CSS, and JavaScript code. The game should be self-contained and engaging.
+    Good for: "create a game about fractions", "make a physics simulation", "interactive math game".`,
+    tool: showGame,
+    toolSchema: showGameSchema,
+  },
+  {
+    name: "showFlashcards",
+    description: `Use this tool when the user asks for FLASHCARDS or study tools.
+    
+    Generates a set of 5 flashcards for reviewing a topic. Good for definitions, formulas, or quick facts.
+    Usage: "make flashcards for biology", "study cards for multiplication".`,
+    tool: showFlashcards,
+    toolSchema: showFlashcardsSchema,
   },
   {
     name: "showSteps",
@@ -133,6 +163,27 @@ export const components: TamboComponent[] = [
       "A component for quizzes. Use the 'showQuiz' tool to display this.",
     component: TutorQuiz,
     propsSchema: tutorQuizSchema,
+  },
+  {
+    name: "TutorFullQuiz",
+    description:
+      "A component for full 10-question quizzes. Use the 'showFullQuiz' tool to display this.",
+    component: TutorFullQuiz,
+    propsSchema: tutorFullQuizSchema,
+  },
+  {
+    name: "TutorGame",
+    description:
+      "A component for interactive games. Use the 'showGame' tool to display this.",
+    component: TutorGame,
+    propsSchema: tutorGameSchema,
+  },
+  {
+    name: "TutorFlashcards",
+    description:
+      "A component for flashcards. Use the 'showFlashcards' tool to display this.",
+    component: TutorFlashcards,
+    propsSchema: tutorFlashcardsSchema,
   },
   {
     name: "TutorStepByStep",

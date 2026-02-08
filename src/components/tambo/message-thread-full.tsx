@@ -45,6 +45,17 @@ export interface MessageThreadFullProps extends React.HTMLAttributes<HTMLDivElem
    * @example variant="compact"
    */
   variant?: VariantProps<typeof messageVariants>["variant"];
+  /**
+   * User button element (avatar)
+   */
+  userButton?: React.ReactNode;
+  /**
+   * User details (name and credits)
+   */
+  userDetails?: {
+    name: string;
+    credits: string | number;
+  };
 }
 
 /**
@@ -53,12 +64,12 @@ export interface MessageThreadFullProps extends React.HTMLAttributes<HTMLDivElem
 export const MessageThreadFull = React.forwardRef<
   HTMLDivElement,
   MessageThreadFullProps
->(({ className, variant, ...props }, ref) => {
+>(({ className, variant, userButton, userDetails, ...props }, ref) => {
   const { containerRef, historyPosition } = useThreadContainerContext();
   const mergedRef = useMergeRefs<HTMLDivElement | null>(ref, containerRef);
 
   const threadHistorySidebar = (
-    <ThreadHistory position={historyPosition}>
+    <ThreadHistory position={historyPosition} userButton={userButton} userDetails={userDetails}>
       <ThreadHistoryHeader />
       <ThreadHistoryNewButton />
       <ThreadHistorySearch />

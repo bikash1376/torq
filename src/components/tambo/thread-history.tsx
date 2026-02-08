@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import React, { useMemo } from "react";
+import { useCanvasStore } from "@/lib/canvas-storage";
 
 /**
  * Context for sharing thread history state and functions
@@ -60,6 +61,11 @@ interface ThreadHistoryProps extends React.HTMLAttributes<HTMLDivElement> {
   children?: React.ReactNode;
   defaultCollapsed?: boolean;
   position?: "left" | "right";
+  userButton?: React.ReactNode;
+  userDetails?: {
+    name: string;
+    credits: string | number;
+  };
 }
 
 const ThreadHistory = React.forwardRef<HTMLDivElement, ThreadHistoryProps>(
@@ -70,6 +76,8 @@ const ThreadHistory = React.forwardRef<HTMLDivElement, ThreadHistoryProps>(
       defaultCollapsed = true,
       position = "left",
       children,
+      userButton,
+      userDetails,
       ...props
     },
     ref,
@@ -160,6 +168,22 @@ const ThreadHistory = React.forwardRef<HTMLDivElement, ThreadHistoryProps>(
             )} // py-4 px-2 is for better alignment when isCollapsed
           >
             {children}
+            <div className={cn("mt-auto pt-2 border-t border-border/50 flex items-center", isCollapsed ? "justify-center" : "gap-2")}>
+              <div className="shrink-0">{userButton}</div>
+              <div
+                className={cn(
+                  "flex flex-col min-w-0 transition-opacity duration-300",
+                  isCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto",
+                )}
+              >
+                <span className="text-sm font-medium truncate">
+                  {userDetails?.name}
+                </span>
+                <span className="text-xs text-muted-foreground truncate">
+                  {userDetails?.credits} Credits
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </ThreadHistoryContext.Provider>
@@ -242,6 +266,12 @@ const ThreadHistoryNewButton = React.forwardRef<
         await startNewThread();
         await refetch();
         onThreadChange?.();
+
+        // Clear active canvas on new thread
+        const store = useCanvasStore.getState();
+        if (store.activeCanvasId) {
+          store.clearCanvas(store.activeCanvasId);
+        }
       } catch (error) {
         console.error("Failed to create new thread:", error);
       }

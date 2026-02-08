@@ -8,6 +8,9 @@ import { tutorQuizSchema } from "@/components/tutor/tutor-quiz";
 import { tutorStepByStepSchema } from "@/components/tutor/tutor-steps";
 import { tutorMathSchema } from "@/components/tutor/tutor-math";
 import { webSearchSchema } from "@/components/tutor/web-search";
+import { tutorFullQuizSchema } from "@/components/tutor/tutor-full-quiz";
+import { tutorGameSchema } from "@/components/tutor/tutor-game";
+import { tutorFlashcardsSchema } from "@/components/tutor/tutor-flashcards";
 import { useCanvasStore } from "@/lib/canvas-storage";
 import { z } from "zod";
 
@@ -56,6 +59,13 @@ export async function showQuiz(props: z.infer<typeof tutorQuizSchema>) {
 }
 
 /**
+ * Tool to show a Full Quiz on the canvas
+ */
+export async function showFullQuiz(props: z.infer<typeof tutorFullQuizSchema>) {
+    return addToCanvas("TutorFullQuiz", props);
+}
+
+/**
  * Tool to show a Step-by-Step guide on the canvas
  */
 export async function showSteps(props: z.infer<typeof tutorStepByStepSchema>) {
@@ -67,6 +77,20 @@ export async function showSteps(props: z.infer<typeof tutorStepByStepSchema>) {
  */
 export async function showMath(props: z.infer<typeof tutorMathSchema>) {
     return addToCanvas("TutorMath", props);
+}
+
+/**
+ * Tool to show a Game on the canvas
+ */
+export async function showGame(props: z.infer<typeof tutorGameSchema>) {
+    return addToCanvas("TutorGame", props);
+}
+
+/**
+ * Tool to show Flashcards on the canvas
+ */
+export async function showFlashcards(props: z.infer<typeof tutorFlashcardsSchema>) {
+    return addToCanvas("TutorFlashcards", props);
 }
 
 // Web search input schema (just the query)
@@ -97,6 +121,7 @@ export async function webSearch(props: z.infer<typeof webSearchInputSchema>) {
             query: props.query,
             results: data.results || [],
             isSearching: false,
+            // Assuming WebSearch component handles 'results' prop
         });
     } catch (error: any) {
         console.error("Web search error:", error);
@@ -108,10 +133,13 @@ export async function webSearch(props: z.infer<typeof webSearchInputSchema>) {
 // Export schemas wrapped in function arguments for tool registration
 // export const showConceptSchema = z.function().args(tutorConceptSchema);
 export const showQuizSchema = z.function().args(tutorQuizSchema);
+export const showFullQuizSchema = z.function().args(tutorFullQuizSchema);
 export const showStepsSchema = z.function().args(tutorStepByStepSchema);
 export const showMathSchema = z.function().args(tutorMathSchema);
+export const showGameSchema = z.function().args(tutorGameSchema);
+export const showFlashcardsSchema = z.function().args(tutorFlashcardsSchema);
 export const webSearchToolSchema = z.function().args(webSearchInputSchema);
 
 // Also export the raw component schemas for component registration
-export { tutorQuizSchema, tutorStepByStepSchema, tutorMathSchema, webSearchSchema };
+export { tutorQuizSchema, tutorFullQuizSchema, tutorStepByStepSchema, tutorMathSchema, tutorGameSchema, tutorFlashcardsSchema, webSearchSchema };
 // export { tutorConceptSchema, tutorQuizSchema, tutorStepByStepSchema, tutorMathSchema };
