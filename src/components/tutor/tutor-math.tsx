@@ -213,28 +213,28 @@ const InteractiveQuiz = ({ question, options, correctAnswerIndex, explanation }:
     };
 
     return (
-        <div className="p-4 border-t border-zinc-200 dark:border-zinc-700 bg-gradient-to-b from-purple-50 to-white dark:from-purple-900/20 dark:to-zinc-900">
+        <div className="p-4 border-t border-border bg-gradient-to-b from-primary/5 to-background">
             <div className="flex items-center gap-2 mb-4">
                 <span className="text-2xl">🧠</span>
-                <h4 className="text-lg font-bold text-purple-700 dark:text-purple-300">Quick Check!</h4>
+                <h4 className="text-lg font-bold text-primary">Quick Check!</h4>
             </div>
 
-            <p className="text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-4">{question}</p>
+            <p className="text-lg font-medium text-foreground mb-4">{question}</p>
 
             <div className="space-y-2 mb-4">
                 {options.map((option, idx) => {
-                    let stateStyle = "border-zinc-200 dark:border-zinc-700 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20";
+                    let stateStyle = "border-border hover:border-primary/50 hover:bg-primary/5";
 
                     if (hasSubmitted) {
                         if (idx === correctAnswerIndex) {
-                            stateStyle = "border-green-500 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-500";
+                            stateStyle = "border-success bg-success/10 ring-2 ring-success";
                         } else if (idx === selected && idx !== correctAnswerIndex) {
-                            stateStyle = "border-red-500 bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500";
+                            stateStyle = "border-destructive bg-destructive/10 ring-2 ring-destructive";
                         } else {
-                            stateStyle = "opacity-40 border-zinc-200 dark:border-zinc-700";
+                            stateStyle = "opacity-40 border-border";
                         }
                     } else if (selected === idx) {
-                        stateStyle = "border-purple-500 bg-purple-50 dark:bg-purple-900/30 ring-2 ring-purple-500";
+                        stateStyle = "border-primary bg-primary/10 ring-2 ring-primary";
                     }
 
                     return (
@@ -244,7 +244,7 @@ const InteractiveQuiz = ({ question, options, correctAnswerIndex, explanation }:
                             disabled={hasSubmitted}
                             className={`w-full text-left p-3 rounded-lg border-2 transition-all duration-200 ${stateStyle}`}
                         >
-                            <span className="font-medium text-zinc-700 dark:text-zinc-300">{option}</span>
+                            <span className="font-medium text-muted-foreground">{option}</span>
                         </button>
                     );
                 })}
@@ -254,16 +254,16 @@ const InteractiveQuiz = ({ question, options, correctAnswerIndex, explanation }:
                 <button
                     onClick={handleSubmit}
                     disabled={selected === null}
-                    className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-bold transition-colors"
+                    className="w-full py-3 px-4 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg font-bold transition-colors"
                 >
                     Check My Answer
                 </button>
             ) : (
-                <div className={`p-4 rounded-lg ${isCorrect ? 'bg-green-100 dark:bg-green-900/40' : 'bg-amber-100 dark:bg-amber-900/40'}`}>
+                <div className={`p-4 rounded-lg ${isCorrect ? 'bg-success/10' : 'bg-warning/10'}`}>
                     <p className="font-bold text-lg mb-2">
                         {isCorrect ? "🎉 Correct!" : "💡 Not quite!"}
                     </p>
-                    <p className="text-zinc-700 dark:text-zinc-300">{explanation}</p>
+                    <p className="text-muted-foreground">{explanation}</p>
                 </div>
             )}
         </div>
@@ -540,17 +540,17 @@ export function TutorMath(props: TutorMathProps) {
     }, [safeSlides, playSlideAudio, slideStartFrames, audioData]);
 
     return (
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden max-w-2xl w-full mx-auto">
+        <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden max-w-2xl w-full mx-auto">
             {/* Header */}
-            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-3 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20">
+            <div className="p-4 border-b border-border flex items-center gap-3 bg-gradient-to-r from-primary/5 to-primary/10">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-md">
                     📚
                 </div>
                 <div>
-                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">
+                    <h3 className="font-bold text-lg text-card-foreground">
                         {props.topic}
                     </h3>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    <p className="text-sm text-muted-foreground">
                         {safeSlides.length} slides • {Math.round(durationInFrames / 30)}s
                     </p>
                 </div>
@@ -562,7 +562,7 @@ export function TutorMath(props: TutorMathProps) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
                         <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
                         <p className="text-lg font-medium">Preparing audio narration...</p>
-                        <p className="text-sm text-zinc-400 mt-1">Loading {safeSlides.length} slides</p>
+                        <p className="text-sm text-muted-foreground mt-1">Loading {safeSlides.length} slides</p>
                     </div>
                 ) : (
                     <Player
@@ -595,8 +595,8 @@ export function TutorMath(props: TutorMathProps) {
 
             {/* Footer hint */}
             {!props.quiz && (
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50 text-center">
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                <div className="p-3 bg-muted/50 text-center">
+                    <p className="text-sm text-muted-foreground">
                         🎬 Watch the video to learn!
                     </p>
                 </div>

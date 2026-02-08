@@ -1,4 +1,7 @@
 "use client";
+import { useUser } from "@insforge/nextjs";
+import { insforge } from "@/lib/insforge";
+import { useEffect, useState } from "react";
 import { useMcpServers } from "@/components/tambo/mcp-config-modal";
 import { MessageThreadFull } from "@/components/tambo/message-thread-full";
 import ComponentsCanvas from "@/components/ui/components-canvas";
@@ -9,55 +12,41 @@ import { TamboProvider } from "@tambo-ai/react";
 import { TamboMcpProvider } from "@tambo-ai/react/mcp";
 import { useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "tambo-demo-context-key";
-
-function getContextKey(): string {
-  let key = localStorage.getItem(STORAGE_KEY);
-  if (!key) {
-    key = crypto.randomUUID();
-    localStorage.setItem(STORAGE_KEY, key);
-  }
-  return key;
-}
-
-function subscribe(callback: () => void): () => void {
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
-}
-
-/**
- * Gets or creates a unique context key for thread isolation.
- *
- * NOTE: For production, use `userToken` prop instead of `contextKey`.
- * The userToken integrates with your auth provider (e.g., Better Auth, Clerk)
- * for proper user isolation with token refresh handling.
- *
- * Example:
- *   const userToken = useUserToken(); // from your auth provider
- *   <TamboProvider userToken={userToken} ... />
- */
-function useContextKey(): string | null {
-  return useSyncExternalStore(subscribe, getContextKey, () => null);
-}
-
-/**
- * Home page component that renders the Tambo chat interface.
- *
- * @remarks
- * The `NEXT_PUBLIC_TAMBO_URL` environment variable specifies the URL of the Tambo server.
- * You do not need to set it if you are using the default Tambo server.
- * It is only required if you are running the API server locally.
- *
- * @see {@link https://github.com/tambo-ai/tambo/blob/main/CONTRIBUTING.md} for instructions on running the API server locally.
- */
-export default function Home() {
+export default function ChatPage() {
   const mcpServers = useMcpServers();
-  const contextKey = useContextKey();
+  const { user, isLoaded } = useUser();
+  const [credits, setCredits] = useState<number | null>(null);
 
-  // Wait for contextKey to be loaded from localStorage
-  if (!contextKey) {
-    return null;
+  useEffect(() => {
+    if (user) {
+      const fetchProfile = async () => {
+        const { data } = await insforge.database
+          .from("profiles")
+          .select("credits")
+          .eq("id", user.id)
+          .single();
+        if (data) {
+          setCredits(data.credits);
+        }
+      };
+      fetchProfile();
+    }
+  }, [user]);
+
+  if (!isLoaded) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
   }
+
+  if (!user) {
+    return null; // Start redirecting via middleware or let provider handle it
+  }
+
+  // Use user ID as the stable context key for this user's session
+  const userContextKey = user.id;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
@@ -67,11 +56,19 @@ export default function Home() {
         components={components}
         tools={tools}
         mcpServers={mcpServers}
-        contextKey={contextKey}
+        contextKey={userContextKey}
       >
         <TamboMcpProvider>
           <div className="flex h-full overflow-hidden">
-            <div className="flex-1 overflow-hidden">
+            {/* Sidebar Profile Info */}
+            <div className="absolute top-4 left-4 z-50 bg-background/80 backdrop-blur-sm p-3 rounded-lg border border-border shadow-sm max-w-[200px]">
+              <div className="text-sm font-semibold truncate">{user.profile?.name || user.email}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Credits: {credits !== null ? credits : "Loading..."}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden pt-16 md:pt-0"> {/* Add padding top for mobile to avoid overlap with profile */}
               <MessageThreadFull />
             </div>
             <div className="hidden md:block w-[60%] overflow-auto">

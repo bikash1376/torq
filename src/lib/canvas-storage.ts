@@ -36,7 +36,7 @@ export interface CanvasState {
   setActiveCanvas: (id: string | null) => void;
   reorderCanvas: (canvasId: string, newIndex: number) => void;
   clearCanvas: (id: string) => void;
-  addComponent: (canvasId: string, component: CanvasComponent) => void;
+  addComponent: (canvasId: string, component: CanvasComponent, index?: number) => void;
   updateComponent: (
     canvasId: string,
     componentId: string,
@@ -178,7 +178,7 @@ export const useCanvasStore = create<CanvasState>()(
       },
 
       // Add a component to a canvas
-      addComponent: (canvasId: string, componentProps: CanvasComponent) => {
+      addComponent: (canvasId: string, componentProps: CanvasComponent, index?: number) => {
         const componentId = componentProps.componentId || generateId();
         const fullComponent = {
           ...componentProps,
@@ -223,17 +223,26 @@ export const useCanvasStore = create<CanvasState>()(
             return state;
           }
 
-          const updatedCanvases = state.canvases.map((c) =>
-            c.id === canvasId
-              ? {
-                ...c,
-                components: [
-                  ...c.components,
-                  fullComponent,
-                ],
+          const updatedCanvases = state.canvases.map((c) => {
+            if (c.id === canvasId) {
+              const newComponents = [...c.components];
+              if (
+                typeof index === "number" &&
+                index >= 0 &&
+                index <= newComponents.length
+              ) {
+                newComponents.splice(index, 0, fullComponent);
+              } else {
+                newComponents.push(fullComponent);
               }
-              : c,
-          );
+
+              return {
+                ...c,
+                components: newComponents,
+              };
+            }
+            return c;
+          });
 
           // Remove operation from pending after 100ms
           setTimeout(() => {

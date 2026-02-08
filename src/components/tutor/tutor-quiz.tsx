@@ -31,34 +31,34 @@ export function TutorQuiz({ question, options, correctAnswerIndex, explanation }
     };
 
     return (
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-6 max-w-md w-full">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-w-md w-full">
             <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
                     ?
                 </div>
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                <h3 className="text-lg font-semibold text-card-foreground">
                     Quick Quiz
                 </h3>
             </div>
 
-            <div className="text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-6 prose dark:prose-invert max-w-none">
+            <div className="text-lg font-medium text-foreground mb-6 prose dark:prose-invert max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{question}</ReactMarkdown>
             </div>
 
             <div className="space-y-3 mb-6">
                 {options?.map((option, idx) => {
-                    let stateStyle = "border-zinc-200 dark:border-zinc-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/50";
+                    let stateStyle = "border-border hover:border-primary/50 hover:bg-muted/50";
 
                     if (hasSubmitted) {
                         if (idx === correctAnswerIndex) {
-                            stateStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 ring-1 ring-green-500";
+                            stateStyle = "border-success bg-success/10 ring-1 ring-success";
                         } else if (idx === selected && idx !== correctAnswerIndex) {
-                            stateStyle = "border-red-500 bg-red-50 dark:bg-red-900/20 ring-1 ring-red-500";
+                            stateStyle = "border-destructive bg-destructive/10 ring-1 ring-destructive";
                         } else {
-                            stateStyle = "opacity-50 border-zinc-200 dark:border-zinc-800";
+                            stateStyle = "opacity-50 border-border";
                         }
                     } else if (selected === idx) {
-                        stateStyle = "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-500";
+                        stateStyle = "border-primary bg-primary/10 ring-1 ring-primary";
                     }
 
                     return (
@@ -68,12 +68,12 @@ export function TutorQuiz({ question, options, correctAnswerIndex, explanation }
                             disabled={hasSubmitted}
                             className={`w-full text-left p-4 rounded-lg border transition-all duration-200 flex justify-between items-center ${stateStyle}`}
                         >
-                            <span className="text-zinc-700 dark:text-zinc-300">{option}</span>
+                            <span className="text-muted-foreground">{option}</span>
                             {hasSubmitted && idx === correctAnswerIndex && (
-                                <Check className="w-5 h-5 text-green-600" />
+                                <Check className="w-5 h-5 text-success" />
                             )}
                             {hasSubmitted && idx === selected && idx !== correctAnswerIndex && (
-                                <X className="w-5 h-5 text-red-600" />
+                                <X className="w-5 h-5 text-destructive" />
                             )}
                         </button>
                     );
@@ -84,12 +84,12 @@ export function TutorQuiz({ question, options, correctAnswerIndex, explanation }
                 <button
                     onClick={handleSubmit}
                     disabled={selected === null}
-                    className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors shadow-sm shadow-indigo-200 dark:shadow-none"
+                    className="w-full py-3 px-4 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground rounded-lg font-medium transition-colors shadow-sm"
                 >
                     Check Answer
                 </button>
             ) : (
-                <div className={`p-4 rounded-lg text-sm ${isCorrect ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200' : 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-200'}`}>
+                <div className={`p-4 rounded-lg text-sm ${isCorrect ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
                     <p className="font-semibold mb-1">
                         {isCorrect ? "Correct! 🎉" : "Not quite right"}
                     </p>
@@ -101,3 +101,4 @@ export function TutorQuiz({ question, options, correctAnswerIndex, explanation }
         </div>
     );
 }
+

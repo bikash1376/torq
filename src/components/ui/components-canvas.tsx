@@ -43,6 +43,7 @@ export const ComponentsCanvas: React.FC<
     removeComponent,
     addComponent,
     moveComponent,
+    reorderComponent,
   } = useCanvasStore();
 
   const [editingCanvasId, setEditingCanvasId] = React.useState<string | null>(
@@ -86,29 +87,50 @@ export const ComponentsCanvas: React.FC<
       const overComponentId = over.id as string;
 
       // Check if the active item is a component within the active canvas
-      const activeCanvasComponents = canvases.find(c => c.id === activeCanvasId)?.components;
-      const isComponentInActiveCanvas = activeCanvasComponents?.some(comp => comp.componentId === activeComponentId);
+      const activeCanvasComponents = canvases.find(
+        (c) => c.id === activeCanvasId,
+      )?.components;
+      const isComponentInActiveCanvas = activeCanvasComponents?.some(
+        (comp) => comp.componentId === activeComponentId,
+      );
+
+      // Find the index of the component we are dropping over
+      const overIndex =
+        activeCanvasComponents?.findIndex(
+          (c) => c.componentId === overComponentId,
+        ) ?? -1;
 
       if (isComponentInActiveCanvas) {
-        // This is a reorder within the same canvas
-        moveComponent(activeCanvasId, activeCanvasId, activeComponentId, overComponentId);
+        if (overIndex !== -1) {
+          // This is a reorder within the same canvas
+          reorderComponent(activeCanvasId, activeComponentId, overIndex);
+        }
       } else {
         // This is a drag from the sidebar into the canvas
-        const data = active.data.current as { component: string; props: CanvasComponentProps };
+        const data = active.data.current as {
+          component: string;
+          props: CanvasComponentProps;
+        };
         if (!data || !data.component || !data.props) return;
 
         const componentProps = data.props;
         const componentId = `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-        addComponent(activeCanvasId, {
-          ...componentProps,
-          componentId,
-          _inCanvas: true,
-          _componentType: data.component,
-        }, overComponentId); // Add new component at the position of 'overComponentId'
+        const insertIndex = overIndex !== -1 ? overIndex : undefined;
+
+        addComponent(
+          activeCanvasId,
+          {
+            ...componentProps,
+            componentId,
+            _inCanvas: true,
+            _componentType: data.component,
+          },
+          insertIndex,
+        ); // Add new component at the position of 'overComponentId' (index)
       }
     },
-    [activeCanvasId, canvases, addComponent, moveComponent]
+    [activeCanvasId, canvases, addComponent, moveComponent, reorderComponent],
   );
 
   const handleDrop = React.useCallback(
@@ -271,7 +293,7 @@ export const ComponentsCanvas: React.FC<
                   removeComponent(canvasId, componentId);
                 }
               }}
-              className="p-1.5 hover:bg-red-50 hover:text-red-500 text-muted-foreground transition-colors"
+              className="p-1.5 hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
               title="Remove"
             >
               <XIcon className="h-4 w-4" />
@@ -304,7 +326,7 @@ export const ComponentsCanvas: React.FC<
         className={cn(
           "flex items-center overflow-x-auto p-2 pr-10 gap-1",
           "[&::-webkit-scrollbar]:w-[6px]",
-          "[&::-webkit-scrollbar-thumb]:bg-gray-300",
+          "[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30",
           "[&::-webkit-scrollbar:horizontal]:h-[4px]",
         )}
       >
@@ -357,14 +379,14 @@ export const ComponentsCanvas: React.FC<
                 </button>
                 {canvases.length > 1 &&
                   (pendingDeleteCanvasId === c.id ? (
-                    <div className="ml-1 flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-400/30 rounded text-xs text-destructive dark:text-red-300">
+                    <div className="ml-1 flex items-center gap-1 px-2 py-0.5 bg-destructive/10 rounded text-xs text-destructive">
                       <span>Delete?</span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteCanvas(c.id, true);
                         }}
-                        className="p-0.5 hover:text-red-900 dark:hover:text-red-100"
+                        className="p-0.5 hover:text-destructive"
                         title="Confirm delete"
                       >
                         <CheckIcon className="h-3 w-3" />
@@ -374,7 +396,7 @@ export const ComponentsCanvas: React.FC<
                           e.stopPropagation();
                           setPendingDeleteCanvasId(null);
                         }}
-                        className="p-0.5 hover:text-red-900 dark:hover:text-red-100"
+                        className="p-0.5 hover:text-destructive"
                         title="Cancel delete"
                       >
                         <XIcon className="h-3 w-3" />
@@ -408,7 +430,7 @@ export const ComponentsCanvas: React.FC<
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /><path d="M12 7v5l4 2" /></svg>
           </button>
 
-          <div className="absolute right-0 top-full mt-2 w-64 bg-background border border-border rounded-md shadow-lg opacity-0 invisible group-hover/history:opacity-100 group-hover/history:visible transition-all z-50 overflow-hidden">
+          {/* <div className="absolute right-0 top-full mt-2 w-64 bg-background border border-border rounded-md shadow-lg opacity-0 invisible group-hover/history:opacity-100 group-hover/history:visible transition-all z-50 overflow-hidden">
             <div className="p-2 border-b border-border bg-muted/50 text-xs font-semibold text-muted-foreground">
               Recently Generated
             </div>
@@ -437,7 +459,7 @@ export const ComponentsCanvas: React.FC<
                 <div className="p-4 text-center text-xs text-muted-foreground">No history yet</div>
               )}
             </div>
-          </div>
+          </div> */}
         </div>
 
         <button
@@ -453,7 +475,7 @@ export const ComponentsCanvas: React.FC<
         {activeCanvasId && (
           <button
             onClick={() => activeCanvasId && clearCanvas(activeCanvasId)}
-            className="px-3 py-1.5 border border-gray-200 text-primary hover:text-gray-200 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 rounded-md shadow-sm flex items-center gap-1.5 text-sm cursor-pointer"
+            className="px-3 py-1.5 border border-border text-foreground hover:bg-muted rounded-md shadow-sm flex items-center gap-1.5 text-sm cursor-pointer"
             title="Clear canvas"
           >
             <XIcon className="h-4 w-4" />
@@ -466,7 +488,7 @@ export const ComponentsCanvas: React.FC<
         className={cn(
           "flex-1 overflow-auto p-4",
           "[&::-webkit-scrollbar]:w-[6px]",
-          "[&::-webkit-scrollbar-thumb]:bg-gray-300",
+          "[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30",
           "[&::-webkit-scrollbar:horizontal]:h-[4px]",
         )}
       >
