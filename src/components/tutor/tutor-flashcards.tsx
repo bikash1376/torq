@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, RefreshCw, Undo2, Layers } from "lucide-react";
+import { ChevronRight, ChevronLeft, RefreshCw, Layers } from "lucide-react";
 import { getToolGeneration, saveToolGeneration } from "@/app/actions/tool-generations";
 import { Loader2 } from "lucide-react";
 
@@ -106,7 +106,7 @@ export function TutorFlashcards({ topic, cards: initialCards }: TutorFlashcardsP
                 type: "spring",
                 stiffness: 300,
                 damping: 30
-            } as any
+            } as const
         },
         exit: (direction: number) => {
             return {
@@ -118,7 +118,7 @@ export function TutorFlashcards({ topic, cards: initialCards }: TutorFlashcardsP
                     type: "spring",
                     stiffness: 300,
                     damping: 30
-                } as any
+                } as const
             };
         }
     };

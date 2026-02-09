@@ -50,7 +50,7 @@ export function WebSearch({ query, results = [], isSearching = false }: WebSearc
                     </div>
                 ) : results.length === 0 ? (
                     <div className="text-center py-8 text-zinc-500">
-                        No results found for "{query}"
+                        No results found for &quot;{query}&quot;
                     </div>
                 ) : (
                     results.map((result, index) => (

@@ -1,7 +1,5 @@
 "use client";
 // import { useUser, UserButton } from "@insforge/nextjs";
-import { insforge } from "@/lib/insforge";
-import { useEffect, useState } from "react";
 import { useMcpServers } from "@/components/tambo/mcp-config-modal";
 import { MessageThreadFull } from "@/components/tambo/message-thread-full";
 import ComponentsCanvas from "@/components/ui/components-canvas";

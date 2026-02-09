@@ -38,12 +38,12 @@ export async function POST(req: NextRequest) {
         } else {
             return NextResponse.json({ error: "Invalid action" }, { status: 400 });
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[test-db] Error:", error);
         return NextResponse.json({
             success: false,
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         }, { status: 500 });
     }
 }

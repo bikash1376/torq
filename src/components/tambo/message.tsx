@@ -740,7 +740,7 @@ const ReasoningInfo = React.forwardRef<HTMLDivElement, ReasoningInfoProps>(
 
 ReasoningInfo.displayName = "ReasoningInfo";
 
-function keyifyParameters(parameters: any) {
+function keyifyParameters(parameters: unknown) {
   if (!parameters) return {};
 
   // Handle JSON string
@@ -758,7 +758,7 @@ function keyifyParameters(parameters: any) {
     // Check if it matches structure { parameterName: string, parameterValue: any }
     if (parameters.length > 0 && "parameterName" in parameters[0]) {
       return Object.fromEntries(
-        parameters.map((p: any) => [p.parameterName, p.parameterValue]),
+        parameters.map((p: { parameterName: string; parameterValue: unknown }) => [p.parameterName, p.parameterValue]),
       );
     }
     // If empty array or different array, return as is? No, parameters usually expected as object map.

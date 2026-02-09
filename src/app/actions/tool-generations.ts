@@ -4,7 +4,7 @@ import { insforge } from "@/lib/insforge";
 
 export type ToolGenerationType = "game" | "flashcards" | "quiz" | "fullquiz";
 
-export async function saveToolGeneration(type: ToolGenerationType, topic: string, content: any) {
+export async function saveToolGeneration(type: ToolGenerationType, topic: string, content: Record<string, unknown>) {
     if (!topic || !content) {
         console.log("[saveToolGeneration] Skipped - missing topic or content");
         return { success: false, error: "Missing topic or content" };

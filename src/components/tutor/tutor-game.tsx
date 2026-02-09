@@ -36,8 +36,8 @@ export function TutorGame({ topic, html: initialHtml, css: initialCss, javascrip
                     if (!response.ok) throw new Error("Failed to generate game");
                     const data = await response.json();
                     setGameData({ html: data.html, css: data.css, javascript: data.javascript });
-                } catch (err: any) {
-                    setError(err.message);
+                } catch (err: unknown) {
+                    setError(err instanceof Error ? err.message : String(err));
                 } finally {
                     setIsLoading(false);
                 }

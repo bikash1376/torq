@@ -162,14 +162,19 @@ const calculateSlideDuration = (slide: { title: string; content: string; narrati
 
 const MathComposition = ({ slides, slideDurations }: { slides: TutorMathProps['slides'], slideDurations: number[] }) => {
     const safeSlides = Array.isArray(slides) ? slides : [];
-    let currentFrame = 0;
+
+    // Calculate frame positions for each slide
+    const slidePositions = safeSlides.reduce<{ from: number; duration: number }[]>((acc, _, i) => {
+        const previousEnd = i === 0 ? 0 : acc[i - 1].from + acc[i - 1].duration;
+        const duration = slideDurations[i] || 180; // Fallback to 6 seconds
+        acc.push({ from: previousEnd, duration });
+        return acc;
+    }, []);
 
     return (
         <AbsoluteFill className="bg-slate-900">
             {safeSlides.map((slide, i) => {
-                const from = currentFrame;
-                const duration = slideDurations[i] || 180; // Fallback to 6 seconds
-                currentFrame += duration;
+                const { from, duration } = slidePositions[i];
 
                 return (
                     <Sequence key={i} from={from} durationInFrames={duration}>
@@ -294,12 +299,12 @@ export function TutorMath(props: TutorMathProps) {
 
     // Pre-fetch all audio on mount
     useEffect(() => {
-        if (safeSlides.length === 0) {
-            setIsLoading(false);
-            return;
-        }
-
         const fetchAllAudio = async () => {
+            if (safeSlides.length === 0) {
+                setIsLoading(false);
+                return;
+            }
+
             console.log('[TutorMath] Pre-fetching audio for', safeSlides.length, 'slides...');
 
             const audioPromises = safeSlides.map(async (slide, index) => {
@@ -429,7 +434,7 @@ export function TutorMath(props: TutorMathProps) {
 
             try {
                 // Use getCurrentFrame if available
-                const frame = (player as any).getCurrentFrame?.() || 0;
+                const frame = (player as { getCurrentFrame?: () => number }).getCurrentFrame?.() || 0;
 
                 // Find which slide we're on based on cumulative durations
                 let slideIndex = 0;
@@ -500,7 +505,7 @@ export function TutorMath(props: TutorMathProps) {
             // Reset spoken slide when user seeks
             if (player) {
                 try {
-                    const frame = (player as any).getCurrentFrame?.() || 0;
+                    const frame = (player as { getCurrentFrame?: () => number }).getCurrentFrame?.() || 0;
                     // Find which slide we're on
                     let slideIndex = 0;
                     for (let i = 0; i < slideStartFrames.length; i++) {

@@ -15,7 +15,7 @@ import { useCanvasStore } from "@/lib/canvas-storage";
 import { z } from "zod";
 
 // Helper internal function to add to canvas
-function addToCanvas(componentType: string, props: any, canvasTitle: string = "Learning Session") {
+function addToCanvas(componentType: string, props: Record<string, unknown>, canvasTitle: string = "Learning Session") {
     try {
         const store = useCanvasStore.getState();
         let activeCanvasId = store.activeCanvasId;
@@ -38,9 +38,9 @@ function addToCanvas(componentType: string, props: any, canvasTitle: string = "L
         });
 
         return { success: true, message: `Added ${componentType} to the board.` };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Failed to add to canvas:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
 }
 
@@ -123,9 +123,9 @@ export async function webSearch(props: z.infer<typeof webSearchInputSchema>) {
             isSearching: false,
             // Assuming WebSearch component handles 'results' prop
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Web search error:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
 }
 

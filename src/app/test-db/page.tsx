@@ -16,8 +16,8 @@ export default function TestDBPage() {
             });
             const data = await response.json();
             setTestResult(JSON.stringify(data, null, 2));
-        } catch (error: any) {
-            setTestResult("Error: " + error.message);
+        } catch (error: unknown) {
+            setTestResult("Error: " + (error instanceof Error ? error.message : String(error)));
         } finally {
             setLoading(false);
         }
@@ -33,8 +33,8 @@ export default function TestDBPage() {
             });
             const data = await response.json();
             setTestResult(JSON.stringify(data, null, 2));
-        } catch (error: any) {
-            setTestResult("Error: " + error.message);
+        } catch (error: unknown) {
+            setTestResult("Error: " + (error instanceof Error ? error.message : String(error)));
         } finally {
             setLoading(false);
         }

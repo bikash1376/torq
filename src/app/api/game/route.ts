@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json(generatedGame);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Game generation error:", error);
-        return NextResponse.json({ error: error.message || "Failed to generate game" }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to generate game" }, { status: 500 });
     }
 }
