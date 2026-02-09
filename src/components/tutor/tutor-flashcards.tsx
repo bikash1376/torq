@@ -1,24 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, RefreshCw, Undo2, Layers } from "lucide-react";
+import { getToolGeneration, saveToolGeneration } from "@/app/actions/tool-generations";
+import { Loader2 } from "lucide-react";
 
 export const tutorFlashcardsSchema = z.object({
     topic: z.string().describe("Topic of the flashcards"),
     cards: z.array(z.object({
         front: z.string().describe("Front content (term/question)"),
         back: z.string().describe("Back content (definition/answer)"),
-    })).min(1).describe("List of 5 flashcards"),
+    })).min(5).max(5).describe("List of exactly 5 flashcards"),
 });
 
 export type TutorFlashcardsProps = z.infer<typeof tutorFlashcardsSchema>;
 
-export function TutorFlashcards({ topic, cards }: TutorFlashcardsProps) {
+export function TutorFlashcards({ topic, cards: initialCards }: TutorFlashcardsProps) {
+    const [cards, setCards] = useState(initialCards || []);
+    const [isLoading, setIsLoading] = useState(!initialCards || initialCards.length === 0);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [direction, setDirection] = useState(0); // -1 for left, 1 for right
+
+    useEffect(() => {
+        const loadOrSave = async () => {
+            if (initialCards && initialCards.length > 0) {
+                await saveToolGeneration("flashcards", topic, { cards: initialCards });
+                setCards(initialCards);
+                setIsLoading(false);
+            } else {
+                setIsLoading(true);
+                const data = await getToolGeneration("flashcards", topic);
+                if (data?.cards) {
+                    setCards(data.cards);
+                }
+                setIsLoading(false);
+            }
+        };
+        loadOrSave();
+    }, [topic, initialCards]);
 
     const handleFlip = () => setIsFlipped(!isFlipped);
 
@@ -47,6 +69,23 @@ export function TutorFlashcards({ topic, cards }: TutorFlashcardsProps) {
         setIsFlipped(false);
     };
 
+    if (isLoading) {
+        return (
+            <div className="w-full max-w-md mx-auto aspect-[4/3] min-h-[400px] flex items-center justify-center bg-muted/20 rounded-xl border border-border">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
+                <p className="text-muted-foreground">Loading flashcards...</p>
+            </div>
+        );
+    }
+
+    if (!cards || cards.length === 0) {
+        return (
+            <div className="w-full max-w-md mx-auto aspect-[4/3] min-h-[400px] flex items-center justify-center bg-muted/20 rounded-xl border border-border">
+                <p className="text-muted-foreground">No flashcards found for this topic.</p>
+            </div>
+        );
+    }
+
     const currentCard = cards[currentIndex];
 
     // Variants for card animation
@@ -67,7 +106,7 @@ export function TutorFlashcards({ topic, cards }: TutorFlashcardsProps) {
                 type: "spring",
                 stiffness: 300,
                 damping: 30
-            }
+            } as any
         },
         exit: (direction: number) => {
             return {
@@ -79,7 +118,7 @@ export function TutorFlashcards({ topic, cards }: TutorFlashcardsProps) {
                     type: "spring",
                     stiffness: 300,
                     damping: 30
-                }
+                } as any
             };
         }
     };
@@ -112,16 +151,23 @@ export function TutorFlashcards({ topic, cards }: TutorFlashcardsProps) {
                             className="w-full h-full relative preserve-3d transition-transform duration-500 rounded-xl shadow-lg border border-border bg-card"
                             animate={{ rotateY: isFlipped ? 180 : 0 }}
                             transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
+                            style={{ transformStyle: "preserve-3d" }}
                         >
                             {/* Front */}
-                            <div className="absolute inset-0 backface-hidden flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-primary/5 to-transparent rounded-xl">
+                            <div
+                                className="absolute inset-0 backface-hidden flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-primary/5 to-transparent rounded-xl"
+                                style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+                            >
                                 <span className="absolute top-4 left-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Question</span>
                                 <h4 className="text-2xl font-bold text-foreground break-words">{currentCard.front}</h4>
                                 <p className="absolute bottom-4 text-xs text-muted-foreground">Click to flip</p>
                             </div>
 
                             {/* Back */}
-                            <div className="absolute inset-0 backface-hidden flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-zinc-900 rounded-xl ring-1 ring-primary/20 rotate-y-180">
+                            <div
+                                className="absolute inset-0 backface-hidden flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-zinc-900 rounded-xl ring-1 ring-primary/20 rotate-y-180"
+                                style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+                            >
                                 <span className="absolute top-4 left-4 text-xs font-bold text-primary uppercase tracking-wider">Answer</span>
                                 <p className="text-xl text-foreground/90 break-words">{currentCard.back}</p>
                             </div>

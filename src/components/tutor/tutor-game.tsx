@@ -7,19 +7,57 @@ import * as Dialog from "@radix-ui/react-dialog";
 
 export const tutorGameSchema = z.object({
     topic: z.string().describe("Topic of the game"),
-    html: z.string().describe("HTML content for the game"),
-    css: z.string().describe("CSS content for the game"),
-    javascript: z.string().describe("JavaScript logic for the game"),
+    html: z.string().optional().describe("HTML content for the game"),
+    css: z.string().optional().describe("CSS content for the game"),
+    javascript: z.string().optional().describe("JavaScript logic for the game"),
 });
 
 export type TutorGameProps = z.infer<typeof tutorGameSchema>;
 
-export function TutorGame({ topic, html, css, javascript }: TutorGameProps) {
+import { saveToolGeneration } from "@/app/actions/tool-generations";
+
+export function TutorGame({ topic, html: initialHtml, css: initialCss, javascript: initialJs }: TutorGameProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [gameData, setGameData] = useState({ html: initialHtml || "", css: initialCss || "", javascript: initialJs || "" });
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadGame = async () => {
+            if (!initialHtml || !initialCss || !initialJs) {
+                try {
+                    setIsLoading(true);
+                    const response = await fetch("/api/game", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ topic }),
+                    });
+                    if (!response.ok) throw new Error("Failed to generate game");
+                    const data = await response.json();
+                    setGameData({ html: data.html, css: data.css, javascript: data.javascript });
+                } catch (err: any) {
+                    setError(err.message);
+                } finally {
+                    setIsLoading(false);
+                }
+            } else {
+                setGameData({ html: initialHtml, css: initialCss, javascript: initialJs });
+                setIsLoading(false);
+                // Save provided game data to DB for future restoration
+                saveToolGeneration("game", topic, {
+                    html: initialHtml,
+                    css: initialCss,
+                    javascript: initialJs
+                });
+            }
+        };
+        loadGame();
+    }, [topic, initialHtml, initialCss, initialJs]);
 
     const renderGame = (doc: Document) => {
+        if (!gameData.html && !gameData.css && !gameData.javascript) return;
+
         doc.open();
         doc.write(`
             <!DOCTYPE html>
@@ -29,14 +67,14 @@ export function TutorGame({ topic, html, css, javascript }: TutorGameProps) {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>${topic}</title>
                 <style>
-                    body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
-                    ${css}
+                    body { margin: 0; overflow: auto; font-family: system-ui, sans-serif; }
+                    ${gameData.css}
                 </style>
             </head>
             <body>
-                ${html}
+                ${gameData.html}
                 <script>
-                    ${javascript}
+                    ${gameData.javascript}
                 </script>
             </body>
             </html>
@@ -45,14 +83,13 @@ export function TutorGame({ topic, html, css, javascript }: TutorGameProps) {
     };
 
     useEffect(() => {
-        if (iframeRef.current) {
+        if (iframeRef.current && !isLoading && !error) {
             const doc = iframeRef.current.contentDocument;
             if (doc) {
                 renderGame(doc);
-                setIsLoading(false);
             }
         }
-    }, [topic, html, css, javascript, isFullscreen]); // Re-render when fullscreen changes to ensure fresh state if needed
+    }, [gameData, isLoading, error, isFullscreen]);
 
     const handleReset = () => {
         setIsLoading(true);
@@ -100,8 +137,14 @@ export function TutorGame({ topic, html, css, javascript }: TutorGameProps) {
             </div>
             <div className="flex-1 relative">
                 {isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 flex-col gap-2">
                         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                        <p className="text-sm text-gray-500">Generating game...</p>
+                    </div>
+                )}
+                {error && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 text-red-500 p-4 text-center">
+                        <p>Error: {error}</p>
                     </div>
                 )}
                 <iframe
@@ -119,7 +162,8 @@ export function TutorGame({ topic, html, css, javascript }: TutorGameProps) {
             <Dialog.Root open={isFullscreen} onOpenChange={setIsFullscreen}>
                 <Dialog.Portal>
                     <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
-                    <Dialog.Content className="fixed inset-4 z-50 outline-none">
+                    <Dialog.Content className="fixed inset-4 z-50 outline-none flex flex-col">
+                        <Dialog.Title className="sr-only">Game Fullscreen View</Dialog.Title>
                         <GameFrame />
                     </Dialog.Content>
                 </Dialog.Portal>
@@ -128,7 +172,7 @@ export function TutorGame({ topic, html, css, javascript }: TutorGameProps) {
     }
 
     return (
-        <div className="w-full h-[500px] border border-border rounded-xl shadow-lg relative bg-background">
+        <div className="w-full h-[600px] border border-border rounded-xl shadow-lg relative bg-background">
             <GameFrame />
         </div>
     );

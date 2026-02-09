@@ -1,4 +1,3 @@
-
 import { createClient } from "@insforge/sdk";
 import { type InsForgeClient } from "@insforge/sdk";
 

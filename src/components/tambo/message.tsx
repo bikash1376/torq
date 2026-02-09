@@ -436,27 +436,71 @@ const ToolcallInfo = React.forwardRef<HTMLDivElement, ToolcallInfoProps>(
         {...props}
       >
         <div className="flex flex-col w-full">
-          <button
-            type="button"
-            aria-expanded={isExpanded}
-            aria-controls={toolDetailsId}
-            onClick={() => setIsExpanded(!isExpanded)}
-            className={cn(
-              "flex items-center gap-1 cursor-pointer hover:bg-gray-100 rounded-md p-1 select-none w-fit",
-            )}
-          >
-            <ToolcallStatusIcon
-              hasToolError={hasToolError}
-              isLoading={isLoading}
-            />
-            <span>{toolStatusMessage}</span>
-            <ChevronDown
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-expanded={isExpanded}
+              aria-controls={toolDetailsId}
+              onClick={() => setIsExpanded(!isExpanded)}
               className={cn(
-                "w-3 h-3 transition-transform duration-200",
-                !isExpanded && "-rotate-90",
+                "flex items-center gap-1 cursor-pointer hover:bg-gray-100 rounded-md p-1 select-none w-fit",
               )}
-            />
-          </button>
+            >
+              <ToolcallStatusIcon
+                hasToolError={hasToolError}
+                isLoading={isLoading}
+              />
+              <span>{toolStatusMessage}</span>
+              <ChevronDown
+                className={cn(
+                  "w-3 h-3 transition-transform duration-200",
+                  !isExpanded && "-rotate-90",
+                )}
+              />
+            </button>
+
+            {toolCallRequest && ["showQuiz", "showFullQuiz", "showGame", "showFlashcards", "showSteps", "showMath", "webSearch"].includes(toolCallRequest.toolName) && !isLoading && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const store = useCanvasStore.getState();
+                  let activeId = store.activeCanvasId;
+                  if (!activeId) {
+                    const newCanvas = store.createCanvas("Learning Session");
+                    activeId = newCanvas.id;
+                  }
+
+                  const toolMap: Record<string, string> = {
+                    showQuiz: "TutorQuiz",
+                    showFullQuiz: "TutorFullQuiz",
+                    showGame: "TutorGame",
+                    showFlashcards: "TutorFlashcards",
+                    showSteps: "TutorStepByStep",
+                    showMath: "TutorMath",
+                    webSearch: "WebSearch",
+                  };
+
+                  const componentType = toolMap[toolCallRequest.toolName];
+                  const props = keyifyParameters(toolCallRequest.parameters) || {};
+
+                  if (componentType) {
+                    store.addComponent(activeId, {
+                      componentId: `restored-${Date.now()}`,
+                      _componentType: componentType,
+                      _inCanvas: true,
+                      canvasId: activeId,
+                      ...props
+                    });
+                  }
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 hover:bg-primary/20 text-primary rounded text-xs transition-colors ml-auto md:ml-2"
+                title="Restore this tool to the canvas"
+              >
+                <span className="w-2 h-2 rounded-full bg-primary/40 mr-1" />
+                Show on Board
+              </button>
+            )}
+          </div>
           <div
             id={toolDetailsId}
             className={cn(
@@ -556,7 +600,7 @@ const SamplingSubThread = ({
                   className={cn(
                     "whitespace-pre-wrap",
                     m.role === "assistant" &&
-                      "bg-muted/50 rounded-md p-2 inline-block w-fit",
+                    "bg-muted/50 rounded-md p-2 inline-block w-fit",
                   )}
                 >
                   {getSafeContent(m.content)}
@@ -696,11 +740,33 @@ const ReasoningInfo = React.forwardRef<HTMLDivElement, ReasoningInfoProps>(
 
 ReasoningInfo.displayName = "ReasoningInfo";
 
-function keyifyParameters(parameters: TamboAI.ToolCallParameter[] | undefined) {
-  if (!parameters) return;
-  return Object.fromEntries(
-    parameters.map((p) => [p.parameterName, p.parameterValue]),
-  );
+function keyifyParameters(parameters: any) {
+  if (!parameters) return {};
+
+  // Handle JSON string
+  if (typeof parameters === "string") {
+    try {
+      return JSON.parse(parameters);
+    } catch {
+      console.warn("Failed to parse tool parameters JSON", parameters);
+      return {};
+    }
+  }
+
+  // Handle Legacy Array format
+  if (Array.isArray(parameters)) {
+    // Check if it matches structure { parameterName: string, parameterValue: any }
+    if (parameters.length > 0 && "parameterName" in parameters[0]) {
+      return Object.fromEntries(
+        parameters.map((p: any) => [p.parameterName, p.parameterValue]),
+      );
+    }
+    // If empty array or different array, return as is? No, parameters usually expected as object map.
+    return {};
+  }
+
+  // Handle Plain Object
+  return parameters;
 }
 
 /**

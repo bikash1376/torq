@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
-import { Check, X, ChevronRight, RefreshCw, Trophy } from "lucide-react";
+import { Check, X, ChevronRight, RefreshCw, Trophy, Loader2 } from "lucide-react";
+import { getToolGeneration, saveToolGeneration } from "@/app/actions/tool-generations";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -13,17 +14,54 @@ export const tutorFullQuizSchema = z.object({
         options: z.array(z.string()).describe("Array of 4 possible answers"),
         correctAnswerIndex: z.number().describe("Index of the correct answer (0-3)"),
         explanation: z.string().describe("Explanation for the correct answer"),
-    })).describe("List of 10 questions"),
+    })).min(10).max(10).describe("List of exactly 10 questions"),
 });
 
 export type TutorFullQuizProps = z.infer<typeof tutorFullQuizSchema>;
 
-export function TutorFullQuiz({ title, questions }: TutorFullQuizProps) {
+export function TutorFullQuiz({ title, questions: initialQuestions }: TutorFullQuizProps) {
+    const [questions, setQuestions] = useState(initialQuestions || []);
+    const [isLoading, setIsLoading] = useState(!initialQuestions || initialQuestions.length === 0);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
     const [isAnswered, setIsAnswered] = useState(false);
     const [score, setScore] = useState(0);
     const [showResults, setShowResults] = useState(false);
+
+    useEffect(() => {
+        const loadOrSave = async () => {
+            if (initialQuestions && initialQuestions.length > 0) {
+                await saveToolGeneration("fullquiz", title, { questions: initialQuestions });
+                setQuestions(initialQuestions);
+                setIsLoading(false);
+            } else {
+                setIsLoading(true);
+                const data = await getToolGeneration("fullquiz", title);
+                if (data?.questions) {
+                    setQuestions(data.questions);
+                }
+                setIsLoading(false);
+            }
+        };
+        loadOrSave();
+    }, [title, initialQuestions]);
+
+    if (isLoading) {
+        return (
+            <div className="p-8 text-center bg-card border border-border rounded-xl">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading quiz...</p>
+            </div>
+        );
+    }
+
+    if (!questions || questions.length === 0) {
+        return (
+            <div className="p-4 text-center text-muted-foreground bg-muted/20 rounded-lg">
+                <p>No questions available for this quiz.</p>
+            </div>
+        );
+    }
 
     const currentQuestion = questions[currentIndex];
 

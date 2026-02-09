@@ -11,10 +11,10 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import {
   EditorContent,
-  Extension,
   useEditor,
   type Editor,
 } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
 import type { SuggestionOptions } from "@tiptap/suggestion";
 import Suggestion from "@tiptap/suggestion";
 import { Cuboid, FileText } from "lucide-react";
@@ -241,7 +241,7 @@ function SuggestionPopover<T extends SuggestionItem>({
                   "flex items-start gap-2 px-2 py-2 text-sm rounded-md text-left",
                   "hover:bg-accent hover:text-accent-foreground transition-colors",
                   index === state.selectedIndex &&
-                    "bg-accent text-accent-foreground",
+                  "bg-accent text-accent-foreground",
                 )}
                 onClick={() => state.command?.(item)}
               >
@@ -307,11 +307,11 @@ function createResourceMentionConfig(
           editor: Editor,
           tiptapCommand: (attrs: { id: string; label: string }) => void,
         ) =>
-        (item: ResourceItem) => {
-          if (checkMentionExists(editor, item.name)) return;
-          tiptapCommand({ id: item.id, label: item.name });
-          onSelect(item);
-        };
+          (item: ResourceItem) => {
+            if (checkMentionExists(editor, item.name)) return;
+            tiptapCommand({ id: item.id, label: item.name });
+            onSelect(item);
+          };
 
       return {
         onStart: (props) => {
@@ -753,13 +753,13 @@ export const TextEditor = React.forwardRef<TamboEditor, TextEditorProps>(
     useImperativeHandle(ref, () => {
       if (!editor) {
         return {
-          focus: () => {},
-          setContent: () => {},
-          appendText: () => {},
+          focus: () => { },
+          setContent: () => { },
+          appendText: () => { },
           getTextWithResourceURIs: () => ({ text: "", resourceNames: {} }),
           hasMention: () => false,
-          insertMention: () => {},
-          setEditable: () => {},
+          insertMention: () => { },
+          setEditable: () => { },
         };
       }
 
