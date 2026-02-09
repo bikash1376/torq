@@ -10,7 +10,7 @@ export default function Home() {
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-2">
-            <div className="relative h-16 w-16 overflow-hidden rounded-full">
+            <div className="relative h-20 w-20 overflow-hidden rounded-full">
               <Image
                 src="/torq.png"
                 alt="Torq Logo"
@@ -18,7 +18,7 @@ export default function Home() {
                 className="object-cover"
               />
             </div>
-            <span className="text-xl font-bold tracking-tight">Torq</span>
+            <span className="text-2xl font-bold tracking-tight">Torq</span>
           </div>
           <nav className="hidden md:flex gap-6 text-sm font-medium">
             <Link href="#features" className="hover:text-primary transition-colors">Features</Link>
@@ -64,14 +64,21 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Abstract Visual / UI Placeholder */}
+          {/* Demo Video */}
           <div className="mt-16 w-full max-w-5xl p-4 md:p-8 bg-zinc-900/50 rounded-xl border border-white/10 shadow-2xl relative overflow-hidden group">
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-            <div className="relative aspect-video rounded-lg overflow-hidden bg-black/40 border border-white/5 flex items-center justify-center">
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <Zap className="h-4 w-4 text-primary" />
-                Interactive Workspace Demo
-              </p>
+            <div className="relative aspect-video rounded-lg overflow-hidden bg-black/40  border border-white/5">
+              <video
+                src="/torq-tutor-demo.mp4"
+                
+                className="w-full h-full object-cover"
+                preload="metadata"
+                autoPlay
+                muted
+                loop
+              >
+                Your browser does not support the video tag.
+              </video>
             </div>
           </div>
         </section>
@@ -192,7 +199,7 @@ export default function Home() {
         <div className="container px-4 md:px-6 flex flex-col md:flex-row justify-between gap-8">
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="relative h-16 w-16 overflow-hidden rounded-full">
+              <div className="relative h-20 w-20 overflow-hidden rounded-full">
                 <Image
                   src="/torq.png"
                   alt="Torq Logo"
@@ -200,7 +207,7 @@ export default function Home() {
                   className="object-cover"
                 />
               </div>
-              <span className="text-lg font-bold">Torq</span>
+              <span className="text-2xl font-bold">Torq</span>
             </div>
             <p className="text-sm text-muted-foreground max-w-xs">
               Empowering learners worldwide effectively and efficiently with AI.
@@ -223,9 +230,20 @@ export default function Home() {
               </ul>
             </div>
           </div> */}
+          <div>
+            <Link
+              href="/chat"
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              Tambo X WeMakeDevs Hackathon
+            </Link>
+            
+          </div>
+          
         </div>
         <div className="container px-4 md:px-6 mt-12 pt-8 border-t border-border/40 text-center text-sm text-muted-foreground">
           © {new Date().getFullYear()} Torq AI. All rights reserved.
+          Created by <Link href="https://x.com/bikash1376" className="underline text-primary">@bikash1376</Link> and Antigravity
         </div>
       </footer>
     </div>

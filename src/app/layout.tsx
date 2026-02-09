@@ -17,6 +17,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Torq - AI Learning Tutor",
   description: "Your personal AI tutor with interactive learning visuals",
+  icons: {
+    icon: "/torq.jpeg",
+  },
 };
 
 export default function RootLayout({
